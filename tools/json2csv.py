@@ -14,7 +14,7 @@ with open('/home/ahkamal/Desktop/rendered_image/Cam.000/_val.json','r') as file:
 	data = json.load(file)
 
 # Store filenames of validation images
-imgs = os.listdir("/home/ahkamal/Desktop/rendered_image/Cam.000/val/")
+imgs = os.listdir('/home/ahkamal/Desktop/rendered_image/Cam.000/val/')
 
 for i,f in enumerate(imgs):
 	with open('/home/ahkamal/Desktop/rendered_image/Cam.000/_val.txt', 'a') as file:
@@ -30,7 +30,6 @@ for i,d in enumerate(data):
 		file.close()
 	for j in imgs:
 		if os.path.join(source,j) == d['filename']:
-			print(1)
 			model_num = d['labels']
 			euler_annot = d["eular_angles"][0]
 			transl_annot = d['translations'][0]
