@@ -113,7 +113,8 @@ models = [
     Label(          'changcheng-H6-2016',         75,      'SUV',          2),
     Label(                 'dazhong-SUV',         76,      'SUV',          2),
     Label(     'dongfeng-fengguang-S560',         77,      'SUV',          2),
-    Label(       'dongfeng-fengxing-SX6',         78,      'SUV',          2)
+    Label(       'dongfeng-fengxing-SX6',         78,      'SUV',          2),
+    Label(           'mercedes-vito-SUV',         79,      'SUV',          2)
 
 ]
 
