@@ -30,8 +30,6 @@ from multiprocessing import Pool
 # from finetune_RT_NMR import finetune_RT
 from finetune_RT_NMR_img import finetune_RT
 
-from mmdet.datasets import kaggle_pku
-from mmdet.datasets.custom import CustomDataset
 
 def single_gpu_test(model, data_loader, show=False):
     model.eval()
@@ -118,7 +116,7 @@ def collect_results(result_part, size, tmpdir=None):
         return ordered_results
 
 def write_submission(outputs, args, dataset,
-                     conf_thresh=0.15,
+                     conf_thresh=0.8,
                      filter_mask=False,
                      horizontal_flip=False):
     img_prefix = dataset.img_prefix
@@ -185,7 +183,7 @@ def filter_output_pool(t):
 
 
 def write_submission_pool(outputs, args, dataset,
-                          conf_thresh=0.1,
+                          conf_thresh=0.8,
                           horizontal_flip=False,
                           max_workers=20):
     """
@@ -236,9 +234,9 @@ def coords2str(coords):
 def parse_args():
     parser = argparse.ArgumentParser(description='MMDet test detector')
     parser.add_argument('--config',
-                        default='/data/ahkamal/Kaggle_PKU_Baidu/configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
+                        default='/data/ahkamal/6-DoF_Vehicle_Pose_Estimation_Through_Deep_Learning/configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
                         help='train config file path')
-    parser.add_argument('--checkpoint', default='/data/ahkamal/wudi_data/Apr05-10-17/epoch_45.pth',
+    parser.add_argument('--checkpoint', default='/data/ahkamal/wudi_data/Apr15-19-14/epoch_7.pth',
                         help='checkpoint file')
     parser.add_argument('--conf', default=0.9, help='Confidence threshold for writing submission') # ADDED - 0.9
     parser.add_argument('--json_out', help='output result file name without extension', type=str)
@@ -333,7 +331,7 @@ def main():
 
     if cfg.write_submission:
         submission = write_submission(outputs, args, dataset,
-                         conf_thresh=0.1,
+                         conf_thresh=0.8,
                          filter_mask=False,
                          horizontal_flip=args.horizontal_flip)
 
