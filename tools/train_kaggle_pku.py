@@ -18,8 +18,6 @@ from mmdet.apis import (get_root_logger, init_dist, set_random_seed,
 from mmdet.datasets import build_dataset
 from mmdet.models import build_detector
 
-# from torch.utils.tensorboard import SummaryWriter
-# writer = SummaryWriter('/home/ahkamal/Desktop/results')
 
 
 def get_git_revision_short_hash():
@@ -81,7 +79,6 @@ def main():
         set_random_seed(args.seed)
 
     model = build_detector(cfg.model, train_cfg=cfg.train_cfg, test_cfg=cfg.test_cfg)
-
     datasets = [build_dataset(cfg.data.train)]
     if len(cfg.workflow) == 2:
         datasets.append(build_dataset(cfg.data.val))
