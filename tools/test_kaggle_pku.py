@@ -10,22 +10,30 @@ import shutil
 import tempfile
 import pandas as pd
 import numpy as np
+from numpy import linalg as LA
+from math import sqrt, log
 
 import mmcv
 import torch
 import torch.distributed as dist
 from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
-from mmcv.runner import get_dist_info, load_checkpoint
+from mmcv.runner import get_dist_info, load_checkpoint, Runner
+from mmcv import Config
 
 from mmdet.apis import init_dist
 from mmdet.core import wrap_fp16_model
 from mmdet.datasets import build_dataloader, build_dataset
 from mmdet.models import build_detector
+from mmdet.utils.map_calculation import TranslationDistance, RotationDistance, check_match
+from mmdet.apis.train import batch_processor, build_optimizer
 
-from mmdet.datasets.kaggle_pku_utils import quaternion_to_euler_angle, filter_igore_masked_using_RT, filter_output
+from mmdet.datasets.kaggle_pku_utils import euler_to_Rot, quaternion_to_euler_angle, filter_igore_masked_using_RT, filter_output
 from tqdm import tqdm
 from evaluations.map_calculation import map_main
 from multiprocessing import Pool
+
+from visualise_pred import visualise_pred
+from sklearn.metrics import average_precision_score
 
 # from finetune_RT_NMR import finetune_RT
 from finetune_RT_NMR_img import finetune_RT
@@ -36,14 +44,25 @@ def single_gpu_test(model, data_loader, show=False):
     results = []
     dataset = data_loader.dataset
     prog_bar = mmcv.ProgressBar(len(dataset))
+
+    # model = MMDataParallel(model, device_ids=range(cfg.gpus)).cuda()
+    args = parse_args()
+    cfg = Config.fromfile(args.config)
+    optimizer = build_optimizer(model, cfg.optimizer)
+    runner = Runner(model, batch_processor, optimizer, cfg.work_dir,
+                    cfg.log_level)
+
+
     for i, data in enumerate(data_loader):
 
         with torch.no_grad():
-            result = model(return_loss=False, rescale=not show, **data)
+            result = runner.model(return_loss=False, rescale=True, **data)
+            # result = model(return_loss=False, rescale=not show, **data)
         results.append(result)
 
         if show:
-            model.module.show_result(data, result)
+            # model.module.show_result(data, result)
+            visualise_pred(result)
 
         batch_size = data['img'][0].size(0)
         for _ in range(batch_size):
@@ -133,9 +152,10 @@ def write_submission(outputs, args, dataset,
     submission += '.csv'
     predictions = {}
 
-    # kaggle_pku.KagglePKUDataset(CustomDataset)
 
     CAR_IDX = 2  # this is the coco car class
+    # visualise_pred(outputs)
+
     for idx_img, output in tqdm(enumerate(outputs)):
         file_name = os.path.basename(output[2]["file_name"])
         ImageId = ".".join(file_name.split(".")[:-1])
@@ -175,11 +195,64 @@ def write_submission(outputs, args, dataset,
     df = pd.DataFrame(data=pred_dict)
     print("Writing submission csv file to: %s" % submission)
     df.to_csv(submission, index=False)
+
+    avg_tr_er = []
+    max_tr_er = []
+    min_tr_er = []
+
+    avg_rot_er = []
+    max_rot_er = []
+    min_rot_er = []
+
+    avg_score = []
+    ap_list = []
+    
+    ann_file = '/home/ahkamal/Desktop/rendered_image/Cam.000/_test.csv'
+    test_gt_annot = pd.read_csv(ann_file)
+
+    num_cars_gt = len(pred_dict['ImageId'])
+
+    for i in range(11): # range is number of thresholds given in map_calculation.py
+        result_flg, scores, mean_tr_error, max_tr_error, min_tr_error,\
+                        mean_rot_error, max_rot_error, min_rot_error = check_match(i,test_gt_annot, pred_dict)
+
+        if mean_tr_error and max_tr_error and min_tr_error\
+        and mean_rot_error and max_rot_error and min_rot_error:
+            
+            avg_tr_er.append(mean_tr_error)
+            max_tr_er.append(max_tr_error)
+            min_tr_er.append(min_tr_error)
+
+            avg_rot_er.append(mean_rot_error)
+            max_rot_er.append(max_rot_error)
+            min_rot_er.append(min_rot_error)
+
+            avg_score.append(scores)
+        
+        if np.sum(result_flg) > 0:
+                n_tp = np.sum(result_flg) # number of true positives detected
+                recall = n_tp / num_cars_gt
+                ap = average_precision_score(result_flg, scores) * recall
+
+        else:
+            ap = 0
+        
+        ap_list.append(ap)
+
+    mean_ap = round(np.mean(ap_list),4)
+
+    print("\nAvg translation error: {}m".format(round(np.mean(avg_tr_er),3)))
+    print("Min T error: {} - Max T error: {}\n".format(min(min_tr_er), max(max_tr_er)))
+    print("Avg rotation error: {}deg".format(round(np.mean(avg_rot_er),3)))
+    print("Min R error: {} - Max R error: {}".format(min(min_rot_er), max(max_rot_er)))
+    print("Avg network confidence: {}%\n".format(round(np.mean(avg_score),2)*100))
+    print('Test {} images mAP is: {}\n'.format(len(pred_dict['ImageId']),mean_ap))
+
     return submission
 
 
 def filter_output_pool(t):
-    return filter_output(*t)
+    return filter_output(*t) 
 
 
 def write_submission_pool(outputs, args, dataset,
@@ -236,7 +309,7 @@ def parse_args():
     parser.add_argument('--config',
                         default='/data/ahkamal/6-DoF_Vehicle_Pose_Estimation_Through_Deep_Learning/configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
                         help='train config file path')
-    parser.add_argument('--checkpoint', default='/data/ahkamal/wudi_data/Apr15-19-14/epoch_7.pth',
+    parser.add_argument('--checkpoint', default='/data/ahkamal/output_data/Apr29-10-40_50000faces/epoch_24.pth',
                         help='checkpoint file')
     parser.add_argument('--conf', default=0.9, help='Confidence threshold for writing submission') # ADDED - 0.9
     parser.add_argument('--json_out', help='output result file name without extension', type=str)
@@ -288,11 +361,12 @@ def main():
 
     # build the dataloader
     dataset = build_dataset(cfg.data.test)
+
     if not os.path.exists(args.out):
         data_loader = build_dataloader(
             dataset,
             imgs_per_gpu=1,
-            workers_per_gpu=cfg.data.workers_per_gpu,
+            workers_per_gpu=0, # ADDED - cfg.data.workers_per_gpu,
             dist=distributed,
             shuffle=False)
 
