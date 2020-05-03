@@ -85,21 +85,22 @@ def camera_view_bounds_2d(scene, cam_ob, me_ob):
             #    continue
             else:
                 frame = [(v / (v.z / z)) for v in frame]
-
+              
         min_x, max_x = frame[1].x, frame[2].x
         min_y, max_y = frame[0].y, frame[1].y
+       	
 
         x = (co_local.x - min_x) / (max_x - min_x)
         y = (co_local.y - min_y) / (max_y - min_y)
 	
         lx.append(x)
         ly.append(y)
-
+        
     min_x = clamp(min(lx), 0.0, 1.0)
     max_x = clamp(max(lx), 0.0, 1.0)
     min_y = clamp(min(ly), 0.0, 1.0)
     max_y = clamp(max(ly), 0.0, 1.0)
-
+    
     bpy.data.meshes.remove(me)
 
     r = scene.render
