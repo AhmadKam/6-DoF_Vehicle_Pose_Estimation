@@ -154,7 +154,6 @@ def write_submission(outputs, args, dataset,
 
 
     CAR_IDX = 2  # this is the coco car class
-    # visualise_pred(outputs)
 
     for idx_img, output in tqdm(enumerate(outputs)):
         file_name = os.path.basename(output[2]["file_name"])
@@ -206,6 +205,8 @@ def write_submission(outputs, args, dataset,
 
     avg_score = []
     ap_list = []
+
+    all_tp = []
     
     ann_file = '/home/ahkamal/Desktop/rendered_image/Cam.000/_test.csv'
     test_gt_annot = pd.read_csv(ann_file)
@@ -213,11 +214,11 @@ def write_submission(outputs, args, dataset,
     num_cars_gt = len(pred_dict['ImageId'])
 
     for i in range(11): # range is number of thresholds given in map_calculation.py
-        result_flg, scores, mean_tr_error, max_tr_error, min_tr_error,\
-                        mean_rot_error, max_rot_error, min_rot_error = check_match(i,test_gt_annot, pred_dict)
+        result_flg, scores, predicted_tp, mean_tr_error, max_tr_error, \
+            min_tr_error, mean_rot_error, max_rot_error, min_rot_error = check_match(i,test_gt_annot, pred_dict)
 
-        if mean_tr_error and max_tr_error and min_tr_error\
-        and mean_rot_error and max_rot_error and min_rot_error:
+        if predicted_tp and mean_tr_error and max_tr_error \
+        and min_tr_error and mean_rot_error and max_rot_error and min_rot_error: # applies only to TP preds
             
             avg_tr_er.append(mean_tr_error)
             max_tr_er.append(max_tr_error)
@@ -228,6 +229,10 @@ def write_submission(outputs, args, dataset,
             min_rot_er.append(min_rot_error)
 
             avg_score.append(scores)
+
+            # need to detect all true postives
+            # need to create annot file for test.json
+            # all_tp.extend(predicted_tp) 
         
         if np.sum(result_flg) > 0:
                 n_tp = np.sum(result_flg) # number of true positives detected
@@ -242,11 +247,13 @@ def write_submission(outputs, args, dataset,
     mean_ap = round(np.mean(ap_list),4)
 
     print("\nAvg translation error: {}m".format(round(np.mean(avg_tr_er),3)))
-    print("Min T error: {} - Max T error: {}\n".format(min(min_tr_er), max(max_tr_er)))
+    print("Min T error: {}m - Max T error: {}m\n".format(min(min_tr_er), max(max_tr_er)))
     print("Avg rotation error: {}deg".format(round(np.mean(avg_rot_er),3)))
-    print("Min R error: {} - Max R error: {}".format(min(min_rot_er), max(max_rot_er)))
+    print("Min R error: {}deg - Max R error: {}deg".format(min(min_rot_er), max(max_rot_er)))
     print("Avg network confidence: {}%\n".format(round(np.mean(avg_score),2)*100))
     print('Test {} images mAP is: {}\n'.format(len(pred_dict['ImageId']),mean_ap))
+
+    visualise_pred(outputs, predicted_tp)
 
     return submission
 
@@ -309,7 +316,7 @@ def parse_args():
     parser.add_argument('--config',
                         default='/data/ahkamal/6-DoF_Vehicle_Pose_Estimation_Through_Deep_Learning/configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
                         help='train config file path')
-    parser.add_argument('--checkpoint', default='/data/ahkamal/output_data/Apr29-10-40_50000faces/epoch_24.pth',
+    parser.add_argument('--checkpoint', default='/data/ahkamal/output_data/May11-11-35/epoch_4.pth',
                         help='checkpoint file')
     parser.add_argument('--conf', default=0.9, help='Confidence threshold for writing submission') # ADDED - 0.9
     parser.add_argument('--json_out', help='output result file name without extension', type=str)
