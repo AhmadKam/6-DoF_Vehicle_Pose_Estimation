@@ -17,7 +17,14 @@ TROUBLESHOOT:
 	Set path using:
 		export LD_LIBRARY_PATH=/home/ahkamal/anaconda3/envs/open-mmlab/lib/python3.7/site-packages/torch/lib:$LD_LIBRARY_PATH
 
+- Make sure that counts is encoded as string not bytes string
 
+- Keep ratio to true in testing
+
+- CUDA out of memory: (PID Number is code process ID)
+	nvidia-smi
+	kill -9 PIDnumber
+s
 Steps for Singularity:
 
 - Install Anaconda following directions from:
