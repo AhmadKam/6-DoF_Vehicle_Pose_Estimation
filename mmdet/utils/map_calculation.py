@@ -83,20 +83,26 @@ def RotationDistance(p, g):
     return W
 
 
-thres_tr_list = [0.1, 0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02, 0.01]
-thres_ro_list = [50, 45, 40, 35, 30, 25, 20, 15, 10, 5]
-delta_x = 1692 - 1686.2379
-fx = 2304.5479
+# thres_tr_list = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02, 0.01, 0.05]
+# thres_ro_list = [110, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
+thres_tr_list = [0.05, 0.045, 0.04, 0.035, 0.03, 0.025, 0.02, 0.015, 0.01, 0.005]
+thres_ro_list = [5, 4.5, 4, 3.5, 3, 2.5, 2, 1.5, 1, 0.5]
+# thres_ro_list = [50, 45, 40, 35, 30, 25, 20, 15, 10, 5]
+# delta_x = 1692 - 1686.2379
+# fx = 2304.5479
+delta_x = 1692 - 1692.0
+fx = 3701.25
 
-def check_match(idx, train_df, valid_df,flip_mode=False):
+def check_match(idx, train_df, valid_df,flip_mode=False,is_vis=False):
     keep_gt = False
-    thre_tr_dist = thres_tr_list[idx]
-    thre_ro_dist = thres_ro_list[idx]
-    train_dict = {imgID: str2coords(s, names=['carid_or_score', 'pitch', 'yaw', 'roll', 'x', 'y', 'z']) for imgID, s in
-                  zip(train_df['ImageId'], train_df['PredictionString'])}
-    valid_dict = {imgID: str2coords(s, names=['pitch', 'yaw', 'roll', 'x', 'y', 'z', 'carid_or_score']) for imgID, s in
-                  zip(valid_df['ImageId'], valid_df['PredictionString'])}
-
+    thre_tr_dist = thres_tr_list[idx] # translation threshold
+    thre_ro_dist = thres_ro_list[idx] # rotation threshold
+    
+    train_dict = {imgID: str2coords(s, names=['carid_or_score', 'yaw', 'pitch', 'roll', 'x', 'y', 'z']) for imgID, s in
+                  zip(train_df['ImageId'], train_df['PredictionString'])} # ADDED - was pitch yaw roll
+    valid_dict = {imgID: str2coords(s, names=['yaw', 'pitch', 'roll', 'x', 'y', 'z', 'carid_or_score']) for imgID, s in
+                  zip(valid_df['ImageId'], valid_df['PredictionString'])} # ADDED - was pitch yaw roll
+    
     if flip_mode:
         print('flip mode activated')
         for imgID in train_dict.keys():
@@ -110,6 +116,11 @@ def check_match(idx, train_df, valid_df,flip_mode=False):
 
     result_flg = []  # 1 for TP, 0 for FP
     scores = []
+
+    all_rot_error = [] # ADDED - entire line
+    all_tr_error = [] # ADDED - entire line
+    predicted_tp = [] # ADDED - entire line
+    print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
     MAX_VAL = 10 ** 10
     for img_id in valid_dict:
         for pcar in sorted(valid_dict[img_id], key=lambda x: -x['carid_or_score']):
@@ -118,23 +129,45 @@ def check_match(idx, train_df, valid_df,flip_mode=False):
             min_idx = -1
             for idx, gcar in enumerate(train_dict[img_id]):
                 tr_dist = TranslationDistance(pcar, gcar)
+            
                 if tr_dist < min_tr_dist:
                     min_tr_dist = tr_dist
                     min_ro_dist = RotationDistance(pcar, gcar)
-                    min_idx = idx
-
+                    min_idx = idx               
+            
+         
             # set the result
             if min_tr_dist < thre_tr_dist and min_ro_dist < thre_ro_dist:
-            #if min_tr_dist < thre_tr_dist:
                 if not keep_gt:
                     train_dict[img_id].pop(min_idx)
                 result_flg.append(1)
+                all_tr_error.append(min_tr_dist) # ADDED - entire line
+                all_rot_error.append(min_ro_dist) # ADDED - entire line
+                predicted_tp.append(img_id)
             else:
                 result_flg.append(0)
             scores.append(pcar['carid_or_score'])
             # scores.append(1.0)
+   
+    if all_tr_error and all_rot_error:
+        mean_tr_error = round(np.mean(all_tr_error),3)
+        max_tr_error = round(max(all_tr_error),3)
+        min_tr_error = round(min(all_tr_error),3)
 
-    return result_flg, scores
+        mean_rot_error = round(np.mean(all_rot_error),3)
+        max_rot_error = round(max(all_rot_error),3)
+        min_rot_error = round(min(all_rot_error),3)
+    
+    else:
+        mean_tr_error = None
+        mean_rot_error = None
+        max_tr_error = None
+        min_tr_error = None
+        max_rot_error = None
+        min_rot_error = None
+
+           
+    return result_flg, scores, predicted_tp, mean_tr_error, max_tr_error, min_tr_error, mean_rot_error, max_rot_error, min_rot_error
 
 
 def RotationDistance_q(q1, q2):
