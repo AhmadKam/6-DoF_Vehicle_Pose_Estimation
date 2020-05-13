@@ -120,7 +120,7 @@ def check_match(idx, train_df, valid_df,flip_mode=False,is_vis=False):
     all_rot_error = [] # ADDED - entire line
     all_tr_error = [] # ADDED - entire line
     predicted_tp = [] # ADDED - entire line
-    print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+
     MAX_VAL = 10 ** 10
     for img_id in valid_dict:
         for pcar in sorted(valid_dict[img_id], key=lambda x: -x['carid_or_score']):
