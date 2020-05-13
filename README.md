@@ -1,2 +1,2 @@
-# 6-DoF_Vehicle_Pose_Estimation_Through_Deep_Learning
+# 6-DoF Vehicle Pose Estimation Through End-to-End Deep Learning
 Capstone Project Code
