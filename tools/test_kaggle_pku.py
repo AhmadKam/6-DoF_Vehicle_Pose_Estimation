@@ -213,7 +213,7 @@ def write_submission(outputs, args, dataset,
 
     num_cars_gt = len(pred_dict['ImageId'])
 
-    for i in range(11): # range is number of thresholds given in map_calculation.py
+    for i in range(10): # range is number of thresholds given in map_calculation.py
         result_flg, scores, predicted_tp, mean_tr_error, max_tr_error, \
             min_tr_error, mean_rot_error, max_rot_error, min_rot_error = check_match(i,test_gt_annot, pred_dict)
 
@@ -231,8 +231,7 @@ def write_submission(outputs, args, dataset,
             avg_score.append(scores)
 
             # need to detect all true postives
-            # need to create annot file for test.json
-            # all_tp.extend(predicted_tp) 
+            all_tp.extend(predicted_tp) 
         
         if np.sum(result_flg) > 0:
                 n_tp = np.sum(result_flg) # number of true positives detected
@@ -251,9 +250,9 @@ def write_submission(outputs, args, dataset,
     print("Avg rotation error: {}deg".format(round(np.mean(avg_rot_er),3)))
     print("Min R error: {}deg - Max R error: {}deg".format(min(min_rot_er), max(max_rot_er)))
     print("Avg network confidence: {}%\n".format(round(np.mean(avg_score),2)*100))
-    print('Test {} images mAP is: {}\n'.format(len(pred_dict['ImageId']),mean_ap))
+    print('Test {} images mAP is: {}%\n'.format(len(pred_dict['ImageId']), round(mean_ap,3)*100))
 
-    visualise_pred(outputs, predicted_tp)
+    visualise_pred(outputs, all_tp)
 
     return submission
 
@@ -316,7 +315,7 @@ def parse_args():
     parser.add_argument('--config',
                         default='/data/ahkamal/6-DoF_Vehicle_Pose_Estimation_Through_Deep_Learning/configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
                         help='train config file path')
-    parser.add_argument('--checkpoint', default='/data/ahkamal/output_data/May11-11-35/epoch_4.pth',
+    parser.add_argument('--checkpoint', default='/data/ahkamal/output_data/May12-14-00(lowthresh)/epoch_11.pth',
                         help='checkpoint file')
     parser.add_argument('--conf', default=0.9, help='Confidence threshold for writing submission') # ADDED - 0.9
     parser.add_argument('--json_out', help='output result file name without extension', type=str)

@@ -120,7 +120,7 @@ def load_anno_idx(idx, train, all_imgs_coords_points, draw=False, draw_dir='/hom
             # project 3D points to 2d image plane
             yaw, pitch, roll = gt_pred['yaw'], gt_pred['pitch'], gt_pred['roll']
             # I think the pitch and yaw should be exchanged
-            yaw, pitch, roll = -pitch, -yaw, -roll # ADDED - original --> -pitch, -yaw, -roll
+            # yaw, pitch, roll = -pitch, -yaw, -roll # ADDED - original --> -pitch, -yaw, -roll
 
             # Rt = np.eye(4)
             # t = np.array([gt_pred['x'], gt_pred['y'], gt_pred['z']])
@@ -191,7 +191,7 @@ def load_anno_idx(idx, train, all_imgs_coords_points, draw=False, draw_dir='/hom
                 cv2.rectangle(merged_image, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), (0, 0, 255),
                             thickness=5)
 
-            imwrite(merged_image, os.path.join(draw_dir, train['ImageId'].iloc[idx] + '.jpg'))
+            # imwrite(merged_image, os.path.join(draw_dir, train['ImageId'].iloc[idx] + '.jpg'))
             # imwrite(mask_all.astype(np.uint8),'/home/ahkamal/Desktop/test7.jpg')
 
         if len(bboxes):
