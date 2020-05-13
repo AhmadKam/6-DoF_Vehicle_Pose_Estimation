@@ -1,3 +1,5 @@
+import os
+
 # model settings
 model = dict(
     type='HybridTaskCascade',
@@ -13,7 +15,7 @@ model = dict(
                 num_branches=1,
                 block='BOTTLENECK',
                 num_blocks=(4,),
-                num_channels=(64,)), # ADDED - 64
+                num_channels=(64,)),
             stage2=dict(
                 num_modules=1,
                 num_branches=2,
@@ -124,7 +126,7 @@ model = dict(
         in_channels=256,
         fc_out_channels=1024,
         roi_feat_size=14,
-        num_classes=35,  # There are total 34 car classes # ADDED - 34
+        num_classes=35,  # There are total 35 car classes # ADDED - 34
         reg_class_agnostic=True,
         loss_car_cls=dict(type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
         loss_quaternion=dict(type='L1', beta=1.0, loss_weight=1.0)),
@@ -275,7 +277,7 @@ train_pipeline = [
          with_carcls_rot=True, with_translation=True, with_camera_rot=False), # ADDED - camera_rot = False
     # dict(type='CameraRotation'),
     # dict(type='CropBottom', bottom_half=200), # ADDED - 1480
-    dict(type='Resize', img_scale=(846,308), keep_ratio=False), # ADDED - keep_ratio=True 1015,369
+    dict(type='Resize', img_scale=(846,308), keep_ratio=False), # ADDED - keep_ratio=True 1015,369 846,308
     # dict(type='RandomFlip', flip_ratio=0.),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='Pad', size_divisor=32),
@@ -292,17 +294,6 @@ train_pipeline = [
 ]
 test_pipeline = [
     dict(type='LoadImageFromFile'),
-    # dict(
-    #     type='Compose',
-    #     transforms=[
-    #     dict(type='Resize', img_scale=(832,288), keep_ratio=True),
-    #     dict(type='Normalize', **img_norm_cfg),
-    #     dict(type='Pad', size_divisor=32),
-    #     dict(type='ImageToTensor', keys=['img']),
-    #     dict(type='Collect', keys=['img']),
-    # dict(type='CropBottom', bottom_half=1480),# ADDED - 1480
-    # dict(type='CropCentreResize', top=50, bottom=100, left=25, right=50),
-    # dict(type='CropCentreResize', top=100, bottom=250, left=50, right=100),
     dict(
         type='MultiScaleFlipAug',
         img_scale=(846,308),  # (576, 1600, 3)
@@ -356,6 +347,7 @@ data = dict(
         #img_prefix='/home/ahmad/Desktop/Kaggle_PKU_Baidu/data/Kaggle/pku-autonomous-driving/validation_images_CLAHE',  # valid variation
         #img_prefix='/home/ahmad/Desktop/Kaggle_PKU_Baidu/data/Kaggle/pku-autonomous-driving/validation_images',  # We create 400 validation images
 
+        # img_prefix = '/home/ahkamal/Desktop/rendered_image/Cam.000/test/',
         img_prefix = '/home/ahkamal/Desktop/rendered_image/Cam.000/test/',
         # img_prefix='/data/ahkamal/Kaggle_PKU_Baidu_v1/data/Kaggle/pku-autonomous-driving/val1/',
         pipeline=test_pipeline))
@@ -375,33 +367,29 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=500,
     warmup_ratio=1.0 / 3,
-    step=[10, 22]) # ADDED - 80 180
+    step=[80,180]) # ADDED - 80 180 - 10 22 - 22 27
 checkpoint_config = dict(interval=1)
 # yapf:disable0
 log_config = dict(
-    interval=200,
+    interval= 500,
     hooks=[
         dict(type='TextLoggerHook'),
         dict(type='TensorboardLoggerHook')
     ])
 # yapf:enable
 # runtime settings
-total_epochs = 25 # number of epochs
+total_epochs = 200 # number of epochs
 #dist_params = dict(backend='nccl')
 dist_params = dict(backend='nccl', init_method="tcp://127.0.0.1:8001")
 
 log_level = 'INFO'
 work_dir = '/data/ahkamal/output_data/'
 load_from = '/data/ahkamal/6-DoF_Vehicle_Pose_Estimation_Through_Deep_Learning/configs/htc/htc_hrnetv2p_w48_20e_20190810-f6d2c3fd.pth'
-#load_from = '/home/ahmad/Desktop/Kaggle_PKU_Baidu/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
-#load_from = '/home/ahmad/Desktop/Kaggle_PKU_Baidu/data/Kaggle/wudi_data/Jan07-20-00-59/epoch_5.pth'
-#load_from = '/home/ahmad/Desktop/Kaggle_PKU_Baidu/data/Kaggle/checkpoints/all_cwxe99_3070100flip05resumme93Dec29-16-28-48_trimmed_translation.pth'
-#load_from = '/home/ahmad/Desktop/Kaggle_PKU_Baidu/data/Kaggle/wudi_data/Jan18-19-45/epoch_116.pth'
-# resume_from = '/data/ahkamal/wudi_data/Mar30-13-27/epoch_6.pth'
-# load_from = '/home/ahmad/Desktop/Kaggle_PKU_Baidu/data/Kaggle/wudi_data/Jan29-00-02/epoch_261.pth'
-# resume_from = '/data/ahkamal/output_data/Apr20-19-28/epoch_7.pth'
-# load_from = None
-resume_from = None
+# load_from = '/home/ahkamal/Desktop/htc_hrnetv2p_w48_28e_20190810-a4274b38.pth'
+# load_from = '/home/ahkamal/Desktop/htc_dconv_c3-c5_mstrain_400_1400_x101_64x4d_fpn_20e_20190408-0e50669c.pth'
+resume_from = '/data/ahkamal/output_data/May12-14-00(lowthresh)/epoch_15.pth'
+# load_from = None # always load from
+# resume_from = None
 workflow = [('train', 1)]
 
 # postprocessing flags here

@@ -7,15 +7,15 @@ from datetime import datetime
 import shutil
 
 batch_size = 1
-num_epochs = 12
-num_imgs = 1600
-num_iter = 1600 # loss intervals for plotting
+num_epochs = 25
+num_imgs = 5000
+num_train = 4000 # number of training images
 
 
 time = '{}'.format(datetime.now().strftime("%b%d-%H-%M"))
 loss_source = '/home/ahkamal/Desktop/losses_log.txt'
 map_source = '/home/ahkamal/Desktop/mAP_log.txt'
-destination = '/data/ahkamal/tf_log/{}/'.format(time)
+destination = '/data/ahkamal/tf_log/{}_v{}/'.format(time,num_imgs)
 
 if not os.path.exists(destination):
 	os.makedirs(destination)
@@ -43,7 +43,7 @@ mAP = [float(x.rstrip()) for x in mAP]
 
 for i in range(len(loss)):
 
-	if (i+1) % num_iter == 0 and i!= 0 :
+	if (i+1) % num_train == 0 and i!= 0 :
 		l.append(sum(loss[checkpoint:i])/(i-checkpoint))
 		checkpoint = i
 	else:
@@ -53,7 +53,7 @@ for i in range(len(loss)):
 epoch = np.arange(0, num_epochs, num_epochs/len(l)) # number of successful epochs
 
 for n_iter in range(len(epoch)):
-    writer.add_scalar('Loss/train', l[n_iter], n_iter)
+    writer.add_scalar('Loss/train', l[n_iter], n_iter+1)
     writer.add_scalar('mAP/val',mAP[n_iter],n_iter+1)
 
 """
