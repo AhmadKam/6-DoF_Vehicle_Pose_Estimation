@@ -12,6 +12,7 @@ import pandas as pd
 import numpy as np
 from numpy import linalg as LA
 from math import sqrt, log
+import cv2
 
 import mmcv
 import torch
@@ -34,10 +35,10 @@ from multiprocessing import Pool
 
 from visualise_pred import visualise_pred
 from sklearn.metrics import average_precision_score
-
+import timeit ,time
 # from finetune_RT_NMR import finetune_RT
-from finetune_RT_NMR_img import finetune_RT
-
+# from finetune_RT_NMR_img import finetune_RT
+# from finetune_RT_NMR_iou import fin4etune_RT
 
 def single_gpu_test(model, data_loader, show=False):
     model.eval()
@@ -45,12 +46,10 @@ def single_gpu_test(model, data_loader, show=False):
     dataset = data_loader.dataset
     prog_bar = mmcv.ProgressBar(len(dataset))
 
-    # model = MMDataParallel(model, device_ids=range(cfg.gpus)).cuda()
     args = parse_args()
     cfg = Config.fromfile(args.config)
     optimizer = build_optimizer(model, cfg.optimizer)
-    runner = Runner(model, batch_processor, optimizer, cfg.work_dir,
-                    cfg.log_level)
+    runner = Runner(model, batch_processor, optimizer, cfg.work_dir, log_level=None)
 
 
     for i, data in enumerate(data_loader):
@@ -60,9 +59,9 @@ def single_gpu_test(model, data_loader, show=False):
             # result = model(return_loss=False, rescale=not show, **data)
         results.append(result)
 
-        if show:
+        # if show:
             # model.module.show_result(data, result)
-            visualise_pred(result)
+            # visualise_pred(result)
 
         batch_size = data['img'][0].size(0)
         for _ in range(batch_size):
@@ -71,12 +70,15 @@ def single_gpu_test(model, data_loader, show=False):
 
 
 def multi_gpu_test(model, data_loader, tmpdir=None):
+    print(2)
+    """
     model.eval()
     results = []
     dataset = data_loader.dataset
     rank, world_size = get_dist_info()
     if rank == 0:
         prog_bar = mmcv.ProgressBar(len(dataset))
+    
     for i, data in enumerate(data_loader):
         with torch.no_grad():
             result = model(return_loss=False, rescale=True, **data)
@@ -91,55 +93,55 @@ def multi_gpu_test(model, data_loader, tmpdir=None):
     results = collect_results(results, len(dataset), tmpdir)
 
     return results
+    """
 
-
-def collect_results(result_part, size, tmpdir=None):
-    rank, world_size = get_dist_info()
-    # create a tmp dir if it is not specified
-    if tmpdir is None:
-        MAX_LEN = 512
-        # 32 is whitespace
-        dir_tensor = torch.full((MAX_LEN,),
-                                32,
-                                dtype=torch.uint8,
-                                device='cuda')
-        if rank == 0:
-            tmpdir = tempfile.mkdtemp()
-            tmpdir = torch.tensor(
-                bytearray(tmpdir.encode()), dtype=torch.uint8, device='cuda')
-            dir_tensor[:len(tmpdir)] = tmpdir
-        dist.broadcast(dir_tensor, 0)
-        tmpdir = dir_tensor.cpu().numpy().tobytes().decode().rstrip()
-    else:
-        mmcv.mkdir_or_exist(tmpdir)
-    # dump the part result to the dir
-    mmcv.dump(result_part, osp.join(tmpdir, 'part_{}.pkl'.format(rank)))
-    dist.barrier()
-    # collect all parts
-    if rank != 0:
-        return None
-    else:
-        # load results of all parts from tmp dir
-        part_list = []
-        for i in range(world_size):
-            part_file = osp.join(tmpdir, 'part_{}.pkl'.format(i))
-            part_list.append(mmcv.load(part_file))
-        # sort the results
-        ordered_results = []
-        for res in zip(*part_list):
-            ordered_results.extend(list(res))
-        # the dataloader may pad some samples
-        ordered_results = ordered_results[:size]
-        # remove tmp dir
-        shutil.rmtree(tmpdir)
-        return ordered_results
+# def collect_results(result_part, size, tmpdir=None):
+#     rank, world_size = get_dist_info()
+#     # create a tmp dir if it is not specified
+#     if tmpdir is None:
+#         MAX_LEN = 512
+#         # 32 is whitespace
+#         dir_tensor = torch.full((MAX_LEN,),
+#                                 32,
+#                                 dtype=torch.uint8,
+#                                 device='cuda')
+#         if rank == 0:
+#             tmpdir = tempfile.mkdtemp()
+#             tmpdir = torch.tensor(
+#                 bytearray(tmpdir.encode()), dtype=torch.uint8, device='cuda')
+#             dir_tensor[:len(tmpdir)] = tmpdir
+#         dist.broadcast(dir_tensor, 0)
+#         tmpdir = dir_tensor.cpu().numpy().tobytes().decode().rstrip()
+#     else:
+#         mmcv.mkdir_or_exist(tmpdir)
+#     # dump the part result to the dir
+#     mmcv.dump(result_part, osp.join(tmpdir, 'part_{}.pkl'.format(rank)))
+#     dist.barrier()
+#     # collect all parts
+#     if rank != 0:
+#         return None
+#     else:
+#         # load results of all parts from tmp dir
+#         part_list = []
+#         for i in range(world_size):
+#             part_file = osp.join(tmpdir, 'part_{}.pkl'.format(i))
+#             part_list.append(mmcv.load(part_file))
+#         # sort the results
+#         ordered_results = []
+#         for res in zip(*part_list):
+#             ordered_results.extend(list(res))
+#         # the dataloader may pad some samples
+#         ordered_results = ordered_results[:size]
+#         # remove tmp dir
+#         shutil.rmtree(tmpdir)
+#         return ordered_results
 
 def write_submission(outputs, args, dataset,
                      conf_thresh=0.8,
                      filter_mask=False,
                      horizontal_flip=False):
+    
     img_prefix = dataset.img_prefix
-
     submission = args.out.replace('.pkl', '') # ADDED - was pkl format
     submission += '_' + img_prefix.split('/')[-1]
     submission += '_conf_' + str(conf_thresh)
@@ -162,6 +164,14 @@ def write_submission(outputs, args, dataset,
         # Wudi change the conf to car prediction
         if len(output[0][CAR_IDX]):
             conf = output[0][CAR_IDX][:, -1]  # output [0] is the bbox
+            """
+            Bbox check
+            """
+            # if output[2]['file_name'] == '/home/ahkamal/Desktop/rendered_image/Cam.000/test/van_Z3.0_s13.7_f88.png':
+            #     bbox_img = mmcv.imread(output[2]['file_name'])
+            #     cv2.rectangle(bbox_img, (int(output[0][CAR_IDX][0][0]), int(output[0][CAR_IDX][0][1])), (int(output[0][CAR_IDX][0][2]), int(output[0][CAR_IDX][0][3])), (0, 0, 255), thickness=5)
+            #     mmcv.imwrite(bbox_img,'/home/ahkamal/Desktop/bboxes/test{}.jpg'.format(idx_img))
+            
             idx_conf = conf > conf_thresh
             if filter_mask:
                 # this filtering step will takes 2 second per iterations
@@ -191,68 +201,115 @@ def write_submission(outputs, args, dataset,
         pred_dict['ImageId'].append(k)
         pred_dict['PredictionString'].append(v)
 
-    df = pd.DataFrame(data=pred_dict)
-    print("Writing submission csv file to: %s" % submission)
-    df.to_csv(submission, index=False)
-
-    avg_tr_er = []
-    max_tr_er = []
-    min_tr_er = []
-
-    avg_rot_er = []
-    max_rot_er = []
-    min_rot_er = []
-
-    avg_score = []
-    ap_list = []
-
-    all_tp = []
     
-    ann_file = '/home/ahkamal/Desktop/rendered_image/Cam.000/_test.csv'
+    ann_file = '/home/ahkamal/Desktop/rendered_images/Cam.000/_test.csv'
     test_gt_annot = pd.read_csv(ann_file)
 
     num_cars_gt = len(pred_dict['ImageId'])
 
-    for i in range(10): # range is number of thresholds given in map_calculation.py
-        result_flg, scores, predicted_tp, mean_tr_error, max_tr_error, \
-            min_tr_error, mean_rot_error, max_rot_error, min_rot_error = check_match(i,test_gt_annot, pred_dict)
+    """
+    For range of thresholds
+    """
+    # avg_tr_er = []
+    # max_tr_er = []
+    # min_tr_er = []
 
-        if predicted_tp and mean_tr_error and max_tr_error \
-        and min_tr_error and mean_rot_error and max_rot_error and min_rot_error: # applies only to TP preds
+    # avg_rot_er = []
+    # max_rot_er = []
+    # min_rot_er = []
+
+    # avg_score = []
+    # ap_list = []
+
+    # all_tp = []
+
+    # for i in range(1): # range is number of thresholds given in map_calculation.py
+    #     result_flg, scores, predicted_tp, mean_tr_error, max_tr_error, \
+    #         min_tr_error, mean_rot_error, max_rot_error, min_rot_error = check_match(i,test_gt_annot, pred_dict)
+
+    #     if predicted_tp and mean_tr_error and max_tr_error \
+    #     and min_tr_error and mean_rot_error and max_rot_error and min_rot_error: # applies only to TP preds
             
-            avg_tr_er.append(mean_tr_error)
-            max_tr_er.append(max_tr_error)
-            min_tr_er.append(min_tr_error)
+    #         avg_tr_er.append(mean_tr_error)
+    #         max_tr_er.append(max_tr_error)
+    #         min_tr_er.append(min_tr_error)
 
-            avg_rot_er.append(mean_rot_error)
-            max_rot_er.append(max_rot_error)
-            min_rot_er.append(min_rot_error)
+    #         avg_rot_er.append(mean_rot_error)
+    #         max_rot_er.append(max_rot_error)
+    #         min_rot_er.append(min_rot_error)
 
-            avg_score.append(scores)
+    #         avg_score.append(scores)
 
-            # need to detect all true postives
-            all_tp.extend(predicted_tp) 
+    #         # need to detect all true postives
+    #         all_tp.extend(predicted_tp) 
         
-        if np.sum(result_flg) > 0:
-                n_tp = np.sum(result_flg) # number of true positives detected
-                recall = n_tp / num_cars_gt
-                ap = average_precision_score(result_flg, scores) * recall
+    #     if np.sum(result_flg) > 0:
+    #             n_tp = np.sum(result_flg) # number of true positives detected
+    #             recall = n_tp / num_cars_gt
+    #             ap = average_precision_score(result_flg, scores) * recall
 
-        else:
-            ap = 0
+    #     else:
+    #         ap = 0
         
-        ap_list.append(ap)
+    #     ap_list.append(ap)
 
-    mean_ap = round(np.mean(ap_list),4)
+    """
+    Only write TP predictions to csv file (Comment out to write all predictions)
+    """
+    # tp_imgs = []
+    # for i in range(len(result_flg)):
+    #     if result_flg[i] == 1:
+    #         tp_imgs.append(test_gt_annot['ImageId'][i])
 
-    print("\nAvg translation error: {}m".format(round(np.mean(avg_tr_er),3)))
-    print("Min T error: {}m - Max T error: {}m\n".format(min(min_tr_er), max(max_tr_er)))
-    print("Avg rotation error: {}deg".format(round(np.mean(avg_rot_er),3)))
-    print("Min R error: {}deg - Max R error: {}deg".format(min(min_rot_er), max(max_rot_er)))
-    print("Avg network confidence: {}%\n".format(round(np.mean(avg_score),2)*100))
-    print('Test {} images mAP is: {}%\n'.format(len(pred_dict['ImageId']), round(mean_ap,3)*100))
+    # temp = {'ImageId':[],'PredictionString':[]}
+    # for i, img in enumerate(pred_dict['ImageId']):
+    #     if img in tp_imgs:
+    #         temp['ImageId'].append(pred_dict['ImageId'][i])
+    #         temp['PredictionString'].append(pred_dict['PredictionString'][i])
+    # pred_dict = temp
 
-    visualise_pred(outputs, all_tp)
+    """
+    For single threshold
+    """
+    result_flg, scores, predicted_tp, mean_tr_error, max_tr_error, \
+    min_tr_error, mean_rot_error, max_rot_error, min_rot_error = check_match(0,test_gt_annot, pred_dict)
+        
+    if np.sum(result_flg) > 0:
+        n_tp = np.sum(result_flg) # number of true positives detected
+        recall = n_tp / num_cars_gt
+    #     ap = average_precision_score(result_flg, scores) * recall # needed?
+    # else:
+    #     ap = 0
+    
+    
+    """
+    Only writes TP predictions to csv file (Comment this section to write all predictions)
+    """
+    tp_imgs = []
+    for i in range(len(result_flg)):
+        if result_flg[i] == 1:
+            tp_imgs.append(test_gt_annot['ImageId'][i])
+
+    temp = {'ImageId':[],'PredictionString':[]}
+    for i, img in enumerate(pred_dict['ImageId']):
+        if img in tp_imgs:
+            temp['ImageId'].append(pred_dict['ImageId'][i])
+            temp['PredictionString'].append(pred_dict['PredictionString'][i])
+    pred_dict = temp
+
+
+    df = pd.DataFrame(data=pred_dict)
+    print("Writing submission csv file to: %s" % submission)
+    df.to_csv(submission, index=False)
+
+    print("\nAvg translation error: {}m".format(round(mean_tr_error,3)))
+    print("Min T error: {}m - Max T error: {}m\n".format(min_tr_error, max_tr_error))
+    print("Avg rotation error: {}deg".format(round(mean_rot_error,3)))
+    print("Min R error: {}deg - Max R error: {}deg".format(min_rot_error, max_rot_error))
+    print("Avg network confidence: {}%\n".format(round(np.mean(scores),2)*100))
+    print('Test {} images mAP is: {}% ({} images)\n'.format(num_cars_gt, round(recall,3)*100, len(pred_dict['ImageId'])))
+
+    # visualise_pred(outputs, tp_imgs)
 
     return submission
 
@@ -315,7 +372,7 @@ def parse_args():
     parser.add_argument('--config',
                         default='/data/ahkamal/6-DoF_Vehicle_Pose_Estimation_Through_Deep_Learning/configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
                         help='train config file path')
-    parser.add_argument('--checkpoint', default='/data/ahkamal/output_data/May12-14-00(lowthresh)/epoch_11.pth',
+    parser.add_argument('--checkpoint', default='/data/ahkamal/output_data/May21-20-49/epoch_16.pth',
                         help='checkpoint file')
     parser.add_argument('--conf', default=0.9, help='Confidence threshold for writing submission') # ADDED - 0.9
     parser.add_argument('--json_out', help='output result file name without extension', type=str)
@@ -341,6 +398,7 @@ def main():
         args.json_out = args.json_out[:-5]
 
     cfg = mmcv.Config.fromfile(args.config)
+
     # Wudi change the args.out directly related to the model checkpoint file data
     if args.horizontal_flip:
         args.out = os.path.join(cfg.work_dir,
@@ -366,8 +424,9 @@ def main():
         init_dist(args.launcher, **cfg.dist_params)
 
     # build the dataloader
-    dataset = build_dataset(cfg.data.test)
 
+    dataset = build_dataset(cfg.data.test)
+    
     if not os.path.exists(args.out):
         data_loader = build_dataloader(
             dataset,
@@ -375,28 +434,34 @@ def main():
             workers_per_gpu=0, # ADDED - cfg.data.workers_per_gpu,
             dist=distributed,
             shuffle=False)
-
+        
         # build the model and load checkpoint
+        t = time.time()
         model = build_detector(cfg.model, train_cfg=None, test_cfg=cfg.test_cfg)
         fp16_cfg = cfg.get('fp16', None)
         if fp16_cfg is not None:
             wrap_fp16_model(model)
         checkpoint = load_checkpoint(model, args.checkpoint, map_location='cpu')
+     
         # old versions did not save class info in checkpoints, this walkaround is
         # for backward compatibility
+
         if 'CLASSES' in checkpoint['meta']:
             model.CLASSES = checkpoint['meta']['CLASSES']
         else:
             model.CLASSES = dataset.CLASSES
 
         if not distributed:
+            d = time.time()
             model = MMDataParallel(model, device_ids=[0])
             outputs = single_gpu_test(model, data_loader, args.show)
+            print(time.time()-d)
         else:
             model = MMDistributedDataParallel(model.cuda())
             outputs = multi_gpu_test(model, data_loader, args.tmpdir)
         mmcv.dump(outputs, args.out)
-
+        print(time.time()-t)
+    
     else:
         outputs = mmcv.load(args.out)
 
@@ -404,10 +469,6 @@ def main():
         rank, _ = get_dist_info()
         if rank != 0:
             return
-
-    # if cfg.pkl_postprocessing_restore_xyz:
-    #     outputs = dataset.pkl_postprocessing_restore_xyz_multiprocessing(outputs)
-    #     mmcv.dump(outputs, args.out[:-4] + '_refined.pkl')
 
     if cfg.write_submission:
         submission = write_submission(outputs, args, dataset,
@@ -418,6 +479,6 @@ def main():
     if cfg.valid_eval:
         map_main(submission, flip_model=args.horizontal_flip)
 
-
 if __name__ == '__main__':
-    main()
+    # main()
+    print('Inference time:{} seconds'.format(timeit.timeit(main,number=1)))
