@@ -136,10 +136,11 @@ def multi_gpu_test(model, data_loader, tmpdir=None):
 #         shutil.rmtree(tmpdir)
 #         return ordered_results
 
-def write_submission(outputs, args, dataset,
+def write_submission(estimations, args, dataset, # ADDED - estimations was outputs
                      conf_thresh=0.8,
                      filter_mask=False,
-                     horizontal_flip=False):
+                     horizontal_flip=False,
+                     save_tp=False):
     
     img_prefix = dataset.img_prefix
     submission = args.out.replace('.pkl', '') # ADDED - was pkl format
@@ -157,44 +158,46 @@ def write_submission(outputs, args, dataset,
 
     CAR_IDX = 2  # this is the coco car class
 
-    for idx_img, output in tqdm(enumerate(outputs)):
-        file_name = os.path.basename(output[2]["file_name"])
-        ImageId = ".".join(file_name.split(".")[:-1])
+    # for i, img_name in enumerate(estimations):
+    for img_name in estimations:
+        for idx_img, output in tqdm(enumerate(estimations[img_name])): #outputs
+            file_name = os.path.basename(output[2]["file_name"])
+            ImageId = ".".join(file_name.split(".")[:-1])
 
-        # Wudi change the conf to car prediction
-        if len(output[0][CAR_IDX]):
-            conf = output[0][CAR_IDX][:, -1]  # output [0] is the bbox
-            """
-            Bbox check
-            """
-            # if output[2]['file_name'] == '/home/ahkamal/Desktop/rendered_image/Cam.000/test/van_Z3.0_s13.7_f88.png':
-            #     bbox_img = mmcv.imread(output[2]['file_name'])
-            #     cv2.rectangle(bbox_img, (int(output[0][CAR_IDX][0][0]), int(output[0][CAR_IDX][0][1])), (int(output[0][CAR_IDX][0][2]), int(output[0][CAR_IDX][0][3])), (0, 0, 255), thickness=5)
-            #     mmcv.imwrite(bbox_img,'/home/ahkamal/Desktop/bboxes/test{}.jpg'.format(idx_img))
-            
-            idx_conf = conf > conf_thresh
-            if filter_mask:
-                # this filtering step will takes 2 second per iterations
-                # idx_keep_mask = filter_igore_masked_images(ImageId[idx_img], output[1][CAR_IDX], img_prefix)
-                idx_keep_mask = filter_igore_masked_using_RT(ImageId, output[2], img_prefix, dataset)
+            # Wudi change the conf to car prediction
+            if len(output[0][CAR_IDX]):
+                conf = output[0][CAR_IDX][:, -1]  # output [0] is the bbox
+                """
+                Bbox check
+                """
+                # if output[2]['file_name'] == '/home/ahkamal/Desktop/rendered_image/Cam.000/test/van_Z3.0_s13.7_f88.png':
+                #     bbox_img = mmcv.imread(output[2]['file_name'])
+                #     cv2.rectangle(bbox_img, (int(output[0][CAR_IDX][0][0]), int(output[0][CAR_IDX][0][1])), (int(output[0][CAR_IDX][0][2]), int(output[0][CAR_IDX][0][3])), (0, 0, 255), thickness=5)
+                #     mmcv.imwrite(bbox_img,'/home/ahkamal/Desktop/bboxes/test{}.jpg'.format(idx_img))
+                
+                idx_conf = conf > conf_thresh
+                if filter_mask:
+                    # this filtering step will takes 2 second per iterations
+                    # idx_keep_mask = filter_igore_masked_images(ImageId[idx_img], output[1][CAR_IDX], img_prefix)
+                    idx_keep_mask = filter_igore_masked_using_RT(ImageId, output[2], img_prefix, dataset)
 
-                # the final id should require both
-                idx = idx_conf * idx_keep_mask
+                    # the final id should require both
+                    idx = idx_conf * idx_keep_mask
+                else:
+                    idx = idx_conf
+                # if 'euler_angle' in output[2].keys():
+                if False:  # NMR has problem saving 'euler angle' Its
+                    eular_angle = output[2]['euler_angle']
+                else:
+                    eular_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
+                translation = output[2]['trans_pred_world']
+                coords = np.hstack((eular_angle[idx], translation[idx], conf[idx, None]))
+
+                coords_str = coords2str(coords)
+
+                predictions[ImageId] = coords_str
             else:
-                idx = idx_conf
-            # if 'euler_angle' in output[2].keys():
-            if False:  # NMR has problem saving 'euler angle' Its
-                eular_angle = output[2]['euler_angle']
-            else:
-                eular_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
-            translation = output[2]['trans_pred_world']
-            coords = np.hstack((eular_angle[idx], translation[idx], conf[idx, None]))
-
-            coords_str = coords2str(coords)
-
-            predictions[ImageId] = coords_str
-        else:
-            predictions[ImageId] = ""
+                predictions[ImageId] = ""
 
     pred_dict = {'ImageId': [], 'PredictionString': []}
     for k, v in predictions.items():
@@ -256,14 +259,14 @@ def write_submission(outputs, args, dataset,
     """
     Only write TP predictions to csv file (Comment out to write all predictions)
     """
-    # tp_imgs = []
+    # predicted_tp = []
     # for i in range(len(result_flg)):
     #     if result_flg[i] == 1:
-    #         tp_imgs.append(test_gt_annot['ImageId'][i])
+    #         predicted_tp.append(test_gt_annot['ImageId'][i])
 
     # temp = {'ImageId':[],'PredictionString':[]}
     # for i, img in enumerate(pred_dict['ImageId']):
-    #     if img in tp_imgs:
+    #     if img in predicted_tp:
     #         temp['ImageId'].append(pred_dict['ImageId'][i])
     #         temp['PredictionString'].append(pred_dict['PredictionString'][i])
     # pred_dict = temp
@@ -285,14 +288,9 @@ def write_submission(outputs, args, dataset,
     """
     Only writes TP predictions to csv file (Comment this section to write all predictions)
     """
-    tp_imgs = []
-    for i in range(len(result_flg)):
-        if result_flg[i] == 1:
-            tp_imgs.append(test_gt_annot['ImageId'][i])
-
     temp = {'ImageId':[],'PredictionString':[]}
     for i, img in enumerate(pred_dict['ImageId']):
-        if img in tp_imgs:
+        if img in predicted_tp:
             temp['ImageId'].append(pred_dict['ImageId'][i])
             temp['PredictionString'].append(pred_dict['PredictionString'][i])
     pred_dict = temp
@@ -311,8 +309,10 @@ def write_submission(outputs, args, dataset,
         print("Avg network confidence: {}%\n".format(round(np.mean(scores),2)*100))
         print('Test {} images mAP is: {}% ({} images)\n'.format(num_cars_gt, round(recall,3)*100, len(pred_dict['ImageId'])))
 
-    # TODO: review if needed or should integrate into not dist section
-    # visualise_pred(outputs, tp_imgs, save_img=False)
+    if save_tp and predicted_tp:
+        # visualise_pred(outputs, predicted_tp, save_img=save_tp)
+        for img_name in estimations:
+            visualise_pred(estimations[img_name], predicted_tp, save_img=save_tp)
 
     return submission
 
@@ -495,12 +495,16 @@ def main(plot=False,save_img=False):
                     #     break
                     # TODO: Here
                     outputs = single_gpu_test(model, data_loader, args.show)
-                                
-
+        
                     for j in range(len(outputs)):
-                        img_name = outputs[j][2]['file_name'].split('/')[-1]
-                        # estimations[img_name] = outputs
+                        img_name = outputs[j][2]['file_name'].split('/')[-1] 
+                        if len(outputs) == 1:  
+                            estimations[img_name] = outputs
+                        elif len(outputs) > 1 and j == 0:
+                            estimations['all_imgs'] = outputs
+                        
                         if plot or save_img:
+                            assert len(outputs) == 1
                             visualise_pred(outputs, plot=plot, save_img=save_img)
                         
                         with open(pred_imgs_log,'a+') as file:
@@ -517,10 +521,13 @@ def main(plot=False,save_img=False):
         else:
             model = MMDistributedDataParallel(model.cuda())
             outputs = multi_gpu_test(model, data_loader, args.tmpdir)
-        mmcv.dump(outputs, args.out)
+        
+        # mmcv.dump(outputs, args.out)
+        mmcv.dump(estimations, args.out) # ADDED
     
     else:
-        outputs = mmcv.load(args.out)
+        # outputs = mmcv.load(args.out)
+        estimations = mmcv.load(args.out) # ADDED
 
     if distributed:
         rank, _ = get_dist_info()
@@ -528,10 +535,11 @@ def main(plot=False,save_img=False):
             return
 
     if cfg.write_submission:
-        submission = write_submission(outputs, args, dataset,
+        submission = write_submission(estimations, args, dataset,
                          conf_thresh=0.8,
                          filter_mask=False,
-                         horizontal_flip=args.horizontal_flip)
+                         horizontal_flip=args.horizontal_flip,
+                         save_tp=True)
 
     if cfg.valid_eval:
         map_main(submission, flip_model=args.horizontal_flip)
