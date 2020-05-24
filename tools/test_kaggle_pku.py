@@ -49,7 +49,7 @@ def single_gpu_test(model, data_loader, show=False):
     args = parse_args()
     cfg = Config.fromfile(args.config)
     optimizer = build_optimizer(model, cfg.optimizer)
-    runner = Runner(model, batch_processor, optimizer, cfg.work_dir, log_level=None)
+    runner = Runner(model, batch_processor, optimizer, cfg.work_dir)
 
 
     for i, data in enumerate(data_loader):
@@ -202,7 +202,7 @@ def write_submission(outputs, args, dataset,
         pred_dict['PredictionString'].append(v)
 
     
-    ann_file = '/home/ahkamal/Desktop/rendered_images/Cam.000/_test.csv'
+    ann_file = '/home/ahkamal/Desktop/rendered_image/Cam.000/_test.csv'
     test_gt_annot = pd.read_csv(ann_file)
 
     num_cars_gt = len(pred_dict['ImageId'])
@@ -302,14 +302,17 @@ def write_submission(outputs, args, dataset,
     print("Writing submission csv file to: %s" % submission)
     df.to_csv(submission, index=False)
 
-    print("\nAvg translation error: {}m".format(round(mean_tr_error,3)))
-    print("Min T error: {}m - Max T error: {}m\n".format(min_tr_error, max_tr_error))
-    print("Avg rotation error: {}deg".format(round(mean_rot_error,3)))
-    print("Min R error: {}deg - Max R error: {}deg".format(min_rot_error, max_rot_error))
-    print("Avg network confidence: {}%\n".format(round(np.mean(scores),2)*100))
-    print('Test {} images mAP is: {}% ({} images)\n'.format(num_cars_gt, round(recall,3)*100, len(pred_dict['ImageId'])))
+    if mean_tr_error and min_tr_error and max_tr_error\
+    and mean_rot_error and min_rot_error and max_rot_error and scores and recall:
+        print("\nAvg translation error: {}m".format(round(mean_tr_error,3)))
+        print("Min T error: {}m - Max T error: {}m\n".format(min_tr_error, max_tr_error))
+        print("Avg rotation error: {}deg".format(round(mean_rot_error,3)))
+        print("Min R error: {}deg - Max R error: {}deg".format(min_rot_error, max_rot_error))
+        print("Avg network confidence: {}%\n".format(round(np.mean(scores),2)*100))
+        print('Test {} images mAP is: {}% ({} images)\n'.format(num_cars_gt, round(recall,3)*100, len(pred_dict['ImageId'])))
 
-    # visualise_pred(outputs, tp_imgs)
+    # TODO: review if needed or should integrate into not dist section
+    # visualise_pred(outputs, tp_imgs, save_img=False)
 
     return submission
 
@@ -391,7 +394,7 @@ def parse_args():
     return args
 
 
-def main():
+def main(plot=False,save_img=False):
     args = parse_args()
 
     if args.json_out is not None and args.json_out.endswith('.json'):
@@ -436,7 +439,6 @@ def main():
             shuffle=False)
         
         # build the model and load checkpoint
-        t = time.time()
         model = build_detector(cfg.model, train_cfg=None, test_cfg=cfg.test_cfg)
         fp16_cfg = cfg.get('fp16', None)
         if fp16_cfg is not None:
@@ -451,16 +453,71 @@ def main():
         else:
             model.CLASSES = dataset.CLASSES
 
+        ############
         if not distributed:
-            d = time.time()
+            estimations = {}
+            pred_imgs_log = cfg.work_dir + 'predicted_images.log'
+            if os.path.exists(pred_imgs_log):
+                os.remove(pred_imgs_log)
+
             model = MMDataParallel(model, device_ids=[0])
-            outputs = single_gpu_test(model, data_loader, args.show)
-            print(time.time()-d)
+            input('Press Enter to start pose estimation. (Ctrl+C to stop)\n')
+            try:
+                while True:
+                    dataset = build_dataset(cfg.data.test)    
+                    data_loader = build_dataloader(
+                        dataset,
+                        imgs_per_gpu=1,
+                        workers_per_gpu=0, # ADDED - cfg.data.workers_per_gpu,
+                        dist=distributed,
+                        shuffle=False)
+
+                    # TODO: Here
+                    # dataloader_name = data_loader._index_sampler.sampler.data_source.img_infos
+                    # temp = dataloader_name[:]
+                    # if os.path.exists(pred_imgs_log):
+                    #     with open(pred_imgs_log,'r') as file:
+                    #         pred_imgs = file.readlines()
+                    #     file.close()
+                    #     i = 0
+                    #     while i < len(dataloader_name):
+                    #         if (dataloader_name[i]['filename'].split('/')[-1] + '\n') in pred_imgs:
+                    #             temp.pop(i)
+                    #             i = 0
+                    #         else:
+                    #             break
+                                    
+                    #         dataloader_name = temp[:]
+
+                    # # Check for new images
+                    # if len(dataloader_name) == 0:
+                    #     print("\nPose estimation finished.\n")
+                    #     break
+                    # TODO: Here
+                    outputs = single_gpu_test(model, data_loader, args.show)
+                                
+
+                    for j in range(len(outputs)):
+                        img_name = outputs[j][2]['file_name'].split('/')[-1]
+                        # estimations[img_name] = outputs
+                        if plot or save_img:
+                            visualise_pred(outputs, plot=plot, save_img=save_img)
+                        
+                        with open(pred_imgs_log,'a+') as file:
+                            pred_imgs = file.readlines()
+                            if img_name not in pred_imgs:
+                                file.write(img_name + '\n')
+                        file.close()
+
+                    # time.sleep(2) # wait until new image is taken
+            except KeyboardInterrupt:
+                pass
+        ###########
+
         else:
             model = MMDistributedDataParallel(model.cuda())
             outputs = multi_gpu_test(model, data_loader, args.tmpdir)
         mmcv.dump(outputs, args.out)
-        print(time.time()-t)
     
     else:
         outputs = mmcv.load(args.out)
@@ -480,5 +537,5 @@ def main():
         map_main(submission, flip_model=args.horizontal_flip)
 
 if __name__ == '__main__':
-    # main()
-    print('Inference time:{} seconds'.format(timeit.timeit(main,number=1)))
+    main(plot=False) # add save_img=True to save pred images
+    # print('Inference time:{} seconds'.format(timeit.timeit(main,number=1)))
