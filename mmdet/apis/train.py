@@ -1,5 +1,7 @@
 from __future__ import division
+import os
 import re
+import numpy as np
 from collections import OrderedDict
 
 import torch
@@ -36,18 +38,89 @@ from .env import get_root_logger
 #     return loss, log_vars
 
 def parse_losses(losses):
+
     log_vars = OrderedDict()
     for loss_name, loss_value in losses.items():
+       
         if isinstance(loss_value, torch.Tensor):
+            # if 'car' not in loss_name.split('_') and 'cls' not in loss_name.split('_'):
             log_vars[loss_name] = loss_value.mean()
+            
         elif isinstance(loss_value, list):
             log_vars[loss_name] = sum(_loss.mean() for _loss in loss_value)
         else:
             raise TypeError('{} is not a tensor or list of tensors'.format(loss_name))
-
+        
     loss = sum(_value for _key, _value in log_vars.items() if 'loss' in _key)
 
     log_vars['loss'] = loss
+
+    """
+    Records losses to txt file
+    (used to plot trainig loss curve in Tensorboard)
+    """
+    epoch_loss_log = '/home/ahkamal/Desktop/epoch_losses.log'
+    all_epoch_losses = '/home/ahkamal/Desktop/all_epoch_losses.log'
+
+    transl_loss_log = '/home/ahkamal/Desktop/transl_losses.log'
+    all_transl_losses = '/home/ahkamal/Desktop/all_transl_losses.log'
+
+    rot_loss_log = '/home/ahkamal/Desktop/rot_losses.log'
+    all_rot_losses = '/home/ahkamal/Desktop/all_rot_losses.log'
+
+    # training loss
+    with open(all_epoch_losses,'a') as file:
+        file.write('{}'.format(loss))
+        file.write("\n")
+    file.close()
+
+    # translation loss
+    with open(all_transl_losses,'a') as file:
+        file.write('{}'.format(log_vars['kaggle/s2.loss_translation'].item()))
+        file.write("\n")
+    file.close()
+
+    # rotation loss
+    with open(all_rot_losses,'a') as file:
+        file.write('{}'.format(log_vars['kaggle/s2.loss_quaternion'].item()))
+        file.write("\n")
+    file.close()
+
+    num_epoch_losses = open(all_epoch_losses,'r').readlines()
+    num_transl_losses = open(all_transl_losses,'r').readlines()
+    num_rot_losses = open(all_rot_losses,'r').readlines()
+
+    num_train = len(os.listdir('/home/ahkamal/Desktop/rendered_image/Cam.000/train/'))
+    
+    if len(num_epoch_losses) >= num_train:
+        if len(num_epoch_losses) % num_train == 0:
+            num_epochs = int((num_train*((len(num_epoch_losses) / num_train)-1)))
+            
+            all_ep_loss = [float(x) for x in num_epoch_losses[num_epochs:]]
+            avg_epoch_loss = np.mean(all_ep_loss)
+            
+            all_tr_loss = [float(x) for x in num_transl_losses[num_epochs:]]
+            avg_transl_loss = np.mean(all_tr_loss)
+
+            all_ro_loss = [float(x) for x in num_rot_losses[num_epochs:]]
+            avg_rot_loss = np.mean(all_ro_loss)
+            
+            with open(epoch_loss_log,'a') as file:
+                file.write('{}'.format(avg_epoch_loss))
+                file.write("\n")
+            file.close()
+
+            with open(transl_loss_log,'a') as file:
+                file.write('{}'.format(avg_transl_loss))
+                file.write("\n")
+            file.close()
+
+            with open(rot_loss_log,'a') as file:
+                file.write('{}'.format(avg_rot_loss))
+                file.write("\n")
+            file.close()
+
+
     for name in log_vars:
         log_vars[name] = log_vars[name].item()
 

@@ -209,9 +209,7 @@ def euler_to_Rot_YPR(yaw, pitch, roll):
                   [0, cos(pitch), -sin(pitch)],
                   [0, sin(pitch), cos(pitch)]])
     R = np.array([[cos(roll), -sin(roll), 0],
-                  [sin(
-
-                      roll), cos(roll), 0],
+                  [sin(roll), cos(roll), 0],
                   [0, 0, 1]])
 
     return Y, P, R
@@ -588,7 +586,7 @@ def filter_igore_masked_images(
     for i, mask_car_rle in enumerate(mask_list):
         mask_car = maskUtils.decode(mask_car_rle)
         im_combime = np.zeros(mask_im.shape)
-        im_combime[1480:, :] = mask_car
+        im_combime[:, :] = mask_car
 
         # now we calculate the IoU:
         area_car = im_combime.sum()
@@ -653,8 +651,6 @@ def filter_igore_masked_using_RT(
 
         # project 3D points to 2d image plane
         yaw, pitch, roll = euler_angle[i]
-        # I think the pitch and yaw should be exchanged
-        yaw, pitch, roll = -pitch, -yaw, -roll
         Rt = np.eye(4)
         t = np.array(trans_pred_world[i])
         Rt[:3, 3] = t

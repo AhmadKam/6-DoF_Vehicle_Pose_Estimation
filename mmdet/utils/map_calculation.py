@@ -43,7 +43,7 @@ def str2coords(s, names):
     return coords
 
 
-def TranslationDistance(p, g, abs_dist=False):
+def TranslationDistance(p, g, abs_dist=True):
     if isinstance(p, np.ndarray):
         diff1 = np.sum((p-g)**2)**0.5
         diff0 = (np.sum(g**2)) ** 0.5
@@ -83,25 +83,21 @@ def RotationDistance(p, g):
     return W
 
 
-# thres_tr_list = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02, 0.01, 0.05]
-# thres_ro_list = [110, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
-thres_tr_list = [0.05, 0.045, 0.04, 0.035, 0.03, 0.025, 0.02, 0.015, 0.01, 0.005]
-thres_ro_list = [5, 4.5, 4, 3.5, 3, 2.5, 2, 1.5, 1, 0.5]
-# thres_ro_list = [50, 45, 40, 35, 30, 25, 20, 15, 10, 5]
-# delta_x = 1692 - 1686.2379
-# fx = 2304.5479
+thres_tr_list = [0.02]
+thres_ro_list = [5]
+
 delta_x = 1692 - 1692.0
 fx = 3701.25
 
-def check_match(idx, train_df, valid_df,flip_mode=False,is_vis=False):
+def check_match(idx, train_df, valid_df,flip_mode=False):
     keep_gt = False
     thre_tr_dist = thres_tr_list[idx] # translation threshold
     thre_ro_dist = thres_ro_list[idx] # rotation threshold
     
     train_dict = {imgID: str2coords(s, names=['carid_or_score', 'yaw', 'pitch', 'roll', 'x', 'y', 'z']) for imgID, s in
-                  zip(train_df['ImageId'], train_df['PredictionString'])} # ADDED - was pitch yaw roll
+                  zip(train_df['ImageId'], train_df['PredictionString'])}
     valid_dict = {imgID: str2coords(s, names=['yaw', 'pitch', 'roll', 'x', 'y', 'z', 'carid_or_score']) for imgID, s in
-                  zip(valid_df['ImageId'], valid_df['PredictionString'])} # ADDED - was pitch yaw roll
+                  zip(valid_df['ImageId'], valid_df['PredictionString'])}
     
     if flip_mode:
         print('flip mode activated')
@@ -117,9 +113,9 @@ def check_match(idx, train_df, valid_df,flip_mode=False,is_vis=False):
     result_flg = []  # 1 for TP, 0 for FP
     scores = []
 
-    all_rot_error = [] # ADDED - entire line
-    all_tr_error = [] # ADDED - entire line
-    predicted_tp = [] # ADDED - entire line
+    all_rot_error = []
+    all_tr_error = []
+    predicted_tp = []
 
     MAX_VAL = 10 ** 10
     for img_id in valid_dict:
@@ -129,7 +125,6 @@ def check_match(idx, train_df, valid_df,flip_mode=False,is_vis=False):
             min_idx = -1
             for idx, gcar in enumerate(train_dict[img_id]):
                 tr_dist = TranslationDistance(pcar, gcar)
-            
                 if tr_dist < min_tr_dist:
                     min_tr_dist = tr_dist
                     min_ro_dist = RotationDistance(pcar, gcar)
@@ -137,12 +132,12 @@ def check_match(idx, train_df, valid_df,flip_mode=False,is_vis=False):
             
          
             # set the result
-            if min_tr_dist < thre_tr_dist and min_ro_dist < thre_ro_dist:
+            if min_tr_dist < thre_tr_dist and min_ro_dist < thre_ro_dist: 
                 if not keep_gt:
                     train_dict[img_id].pop(min_idx)
                 result_flg.append(1)
-                all_tr_error.append(min_tr_dist) # ADDED - entire line
-                all_rot_error.append(min_ro_dist) # ADDED - entire line
+                all_tr_error.append(min_tr_dist)
+                all_rot_error.append(min_ro_dist)
                 predicted_tp.append(img_id)
             else:
                 result_flg.append(0)
@@ -166,7 +161,7 @@ def check_match(idx, train_df, valid_df,flip_mode=False,is_vis=False):
         max_rot_error = None
         min_rot_error = None
 
-           
+
     return result_flg, scores, predicted_tp, mean_tr_error, max_tr_error, min_tr_error, mean_rot_error, max_rot_error, min_rot_error
 
 

@@ -48,22 +48,23 @@ class NumpyEncoder(json.JSONEncoder):
 class KagglePKUDataset(CustomDataset):
     CLASSES = ('car',)
 
-    def load_annotations(self, ann_file, outdir='/home/ahmad/Desktop/Kaggle_PKU_Baidu/data/Kaggle/pku-autonomous-driving'):
-
+    def load_annotations(self, ann_file, outdir='/data/ahkamal/6-DoF_Vehicle_Pose_Estimation_Through_Deep_Learning/blender/'):
+        
         # some hard coded parameters
         self.outdir = outdir
-        self.image_shape = (2710, 3384)  # this is generally the case
-        self.bottom_half = 1480  # this
-        self.unique_car_mode = [2, 6, 7, 8, 9, 12, 14, 16, 18,
-                                19, 20, 23, 25, 27, 28, 31, 32,
-                                35, 37, 40, 43, 46, 47, 48, 50,
-                                51, 54, 56, 60, 61, 66, 70, 71, 76,79]
+        self.image_shape = (1230, 3384)
+        self.bottom_half = 0
+        self.unique_car_mode = [79]
+        # self.unique_car_mode = [2, 6, 7, 8, 9, 12, 14, 16, 18,
+        #                         19, 20, 23, 25, 27, 28, 31, 32,
+        #                         35, 37, 40, 43, 46, 47, 48, 50,
+        #                         51, 54, 56, 60, 61, 66, 70, 71, 76, 79]
         self.cat2label = {car_model: i for i, car_model in enumerate(self.unique_car_mode)}
 
-        # From camera.zip
-        self.camera_matrix = np.array([[2304.5479, 0, 1686.2379],
-                                       [0, 2305.8757, 1354.9849],
-                                       [0, 0, 1]], dtype=np.float32)
+        
+        self.camera_matrix = np.array([[3701.25, 0, 1692.0], 
+                                        [0, 2391.6667, 615.0],
+                                        [0, 0, 1]], dtype=np.float32)                             
 
         print("Loading Car model files...")
         self.car_model_dict = self.load_car_models()
@@ -74,7 +75,7 @@ class KagglePKUDataset(CustomDataset):
             if os.path.isfile(outfile):
                 annotations = json.load(open(outfile, 'r'))
             else:
-                PATH = '/home/ahmad/Desktop/Kaggle_PKU_Baidu/data/Kaggle/ApolloScape_3D_car/train/split/'
+                PATH = '/data/Kaggle/ApolloScape_3D_car/train/split/'
                 ImageId = [i.strip() for i in open(PATH + 'train-list.txt').readlines()]
                 train = pd.read_csv(ann_file)
                 for idx in tqdm(range(len(train))):
@@ -86,7 +87,6 @@ class KagglePKUDataset(CustomDataset):
                 with open(outfile, 'w') as f:
                     json.dump(annotations, f, indent=4, cls=NumpyEncoder)
             annotations = self.clean_corrupted_images(annotations)
-            # annotations = self.clean_outliers(annotations)
 
             self.print_statistics_annotations(annotations)
 
@@ -220,8 +220,7 @@ class KagglePKUDataset(CustomDataset):
 
                 # project 3D points to 2d image plane
                 yaw, pitch, roll = gt_pred['yaw'], gt_pred['pitch'], gt_pred['roll']
-                # I think the pitch and yaw should be exchanged
-                yaw, pitch, roll = -pitch, -yaw, -roll
+
                 Rt = np.eye(4)
                 t = np.array([gt_pred['x'], gt_pred['y'], gt_pred['z']])
                 Rt[:3, 3] = t
@@ -415,7 +414,7 @@ class KagglePKUDataset(CustomDataset):
 
         return True
 
-    def plot_and_examine(self, annotations, draw_dir='/home/ahmad/Desktop/Kaggle_PKU_Baidu/data/Kaggle/wudi_data/train_image_gt_vis'):
+    def plot_and_examine(self, annotations, draw_dir='/data/Kaggle/wudi_data/train_image_gt_vis'):
 
         # for ann in tqdm(annotations):
         # for ann in tqdm(annotations[5000: 5010]):
@@ -878,10 +877,8 @@ class KagglePKUDataset(CustomDataset):
         for point in coords:
             # Get values
             x, y, z = point[3], point[4], point[5]
-            # yaw, pitch, roll = -pitch, -yaw, -roll
             yaw, pitch, roll = point[0], point[1], point[2]
-            yaw, pitch, roll = -pitch, -yaw, -roll
-            # Math
+
             Rt = np.eye(4)
             t = np.array([x, y, z])
             Rt[:3, 3] = t
@@ -936,19 +933,19 @@ class KagglePKUDataset(CustomDataset):
             rles = []
 
             for box_idx in range(len(ann['bboxes'])):
-                translation = ann['translations'][box_idx] # ADDED - [box_idx]
+                translation = ann['translations'][box_idx]
                 if translation[0] < -80 or translation[0] > 80 or \
                         translation[1] < 1 or translation[1] > 50 \
                         or translation[2] < 3 or translation[2] > 150:
                     corrupted_count += 1
                     continue
                 else:
-                    bboxes.append(ann['bboxes'][box_idx])# ADDED - [box_idx])
-                    labels.append(ann['labels'][box_idx])# ADDED - [box_idx])
-                    eular_angles.append(ann['eular_angles'])# ADDED - [box_idx])
-                    quaternion_semispheres.append(ann['quaternion_semispheres'][box_idx])# ADDED - [box_idx])
-                    translations.append(ann['translations'][box_idx])# ADDED - [box_idx])
-                    rles.append(ann['rles'][box_idx])# ADDED - [box_idx])
+                    bboxes.append(ann['bboxes'][box_idx])
+                    labels.append(ann['labels'][box_idx])
+                    eular_angles.append(ann['eular_angles'][box_idx])
+                    quaternion_semispheres.append(ann['quaternion_semispheres'][box_idx])
+                    translations.append(ann['translations'][box_idx])
+                    rles.append(ann['rles'][box_idx])
 
             bboxes = np.array(bboxes, dtype=np.float32)
             labels = np.array(labels, dtype=np.int64)
@@ -973,7 +970,7 @@ class KagglePKUDataset(CustomDataset):
         return annotations_clean
 
     def group_rectangles(self, annotations,
-                         outfile='/home/ahmad/Desktop/Kaggle_PKU_Baidu/data/Kaggle/bboxes_with_translation_pick.pkl',
+                         outfile='/data/Kaggle/bboxes_with_translation_pick.pkl',
                          draw_flag=True):
         """
         This will generate the referenced bboxes for translation regression. Only done onces
@@ -996,7 +993,8 @@ class KagglePKUDataset(CustomDataset):
         idx_valid = np.array(bboxes_with_translation_pick[:, 0] <= self.image_shape[1]) & \
                     np.array(bboxes_with_translation_pick[:, 1] <= self.image_shape[0]) & \
                     np.array(bboxes_with_translation_pick[:, 0] >= 0) & np.array(
-            bboxes_with_translation_pick[:, 1] >= 1480)
+            bboxes_with_translation_pick[:, 1] >= 0)
+
 
         bboxes_with_translation_pick = bboxes_with_translation_pick[idx_valid]
         print('Final number of selected boxed: %d.' % bboxes_with_translation_pick.shape[0])
@@ -1007,10 +1005,10 @@ class KagglePKUDataset(CustomDataset):
             img_2 = img.copy()
             for bb in bboxes_with_translation:
                 img = cv2.rectangle(img, (bb[0], bb[1]), (bb[2], bb[3]), color=(0, 255, 0), thickness=1)
-            imwrite(img, '/home/ahmad/Desktop/Kaggle_PKU_Baidu/data/Kaggle/wudi_data/rect_all.jpg')
+            imwrite(img, '/data/Kaggle/wudi_data/rect_all.jpg')
             for bb in bboxes_with_translation_pick:
                 img_2 = cv2.rectangle(img_2, (bb[0], bb[1]), (bb[2], bb[3]), color=(0, 255, 0), thickness=1)
-            imwrite(img_2, '/home/ahmad/Desktop/Kaggle_PKU_Baidu/data/Kaggle/wudi_data/rect_selected.jpg')
+            imwrite(img_2, '/data/Kaggle/wudi_data/rect_selected.jpg')
 
     def print_statistics_annotations(self, annotations):
         """
@@ -1024,10 +1022,10 @@ class KagglePKUDataset(CustomDataset):
         car_models = []
         for idx in range(len(annotations)):
             ann = annotations[idx]
-            car_per_image.append(len(ann['bboxes'])) # ADDED - len(ann['bboxes'])
+            car_per_image.append(len(ann['bboxes']))
             for box_idx in range(len(ann['bboxes'])):
-                car_models.append(ann['labels'][box_idx]) # ADDED -[box_idx])
-                translation = ann['translations'][box_idx] # ADDED -[box_idx]
+                car_models.append(ann['labels'][box_idx])
+                translation = ann['translations'][box_idx]
 
                 xpt, ypt, xwt, ywt, zwt = self._get_img_coords(translation=translation)
                 xp.append(xpt)
@@ -1235,11 +1233,11 @@ class KagglePKUDataset(CustomDataset):
             Mat, Rot = self.rotateImage(0, 0, 0)
 
         for i in range(len(ann_info['bboxes'])):
-            x1, y1, x2, y2 = ann_info['bboxes'][i] # ADDED - [i]
+            x1, y1, x2, y2 = ann_info['bboxes'][i]
             w, h = x2 - x1, y2 - y1
             if w < 1 or h < 1:
                 continue
-            translation = ann_info['translations'][i] # ADDED - [i]
+            translation = ann_info['translations'][i]
             # X within range (-80, 80) will have cdf of: 0.999738, outlier number: 13
             # Y within range (1, 50) will have cdf of: 0.999819, outlier number: 9
             if translation[0] < -80 or translation[0] > 80 or translation[1] < 1 or translation[1] > 50:
@@ -1255,19 +1253,20 @@ class KagglePKUDataset(CustomDataset):
                 if not self.rotation_augmenation:
 
                     gt_bboxes.append(bbox)
-                    gt_label = self.cat2label[ann_info['labels'][i]] # ADDED - [i]]
+                    gt_label = self.cat2label[ann_info['labels'][i]]
                     gt_labels.append(gt_label)
                     gt_class_labels.append(3)  # coco 3 is "car" class
-                    mask = maskUtils.decode(ann_info['rles'][i])# ADDED - [i])
+                    mask = maskUtils.decode(ann_info['rles'][i])
+                    # mask = ann_info['rles'][i]['counts'].decode("utf-8")
                     gt_masks_ann.append(mask)
 
-                    eular_angles.append(ann_info['eular_angles'][i]) #ADDED - [i])
-                    quaternion_semispheres.append(ann_info['quaternion_semispheres'][i]) # ADDED - [i])
+                    eular_angles.append(ann_info['eular_angles'][i])
+                    quaternion_semispheres.append(ann_info['quaternion_semispheres'][i])
                     translations.append(translation)
                 else:
 
-                    yaw, pitch, roll = ann_info['eular_angles'][i] # ADDED - [i]
-                    r1 = R.from_euler('xyz', [-pitch, -yaw, -roll], degrees=False)
+                    yaw, pitch, roll = ann_info['eular_angles'][i]
+                    r1 = R.from_euler('xyz', [yaw, pitch, roll], degrees=False)
                     r2 = R.from_euler('xyz', [beta, -alpha, -gamma], degrees=False)
 
                     pitch_rot, yaw_rot, roll_rot = (r2 * r1).as_euler('xyz') * (-1)
@@ -1280,7 +1279,7 @@ class KagglePKUDataset(CustomDataset):
                     x_rot, y_rot, z_rot, _ = np.dot(Rot, [x, y, z, 1])
                     translation_rot = np.array([x_rot, y_rot, z_rot])
 
-                    car_name = car_id2name[ann_info['labels'][i]].name # ADDED - [i]
+                    car_name = car_id2name[ann_info['labels'][i]].name
                     vertices = np.array(self.car_model_dict[car_name]['vertices'])
                     vertices[:, 1] = -vertices[:, 1]
                     triangles = np.array(self.car_model_dict[car_name]['faces']) - 1
@@ -1291,7 +1290,7 @@ class KagglePKUDataset(CustomDataset):
                             bbox_rot[0] > self.image_shape[0] or bbox_rot[1] > self.image_shape[1] - self.bottom_half:
                         continue
 
-                    gt_label = self.cat2label[ann_info['labels'][i]] # ADDED - [i]
+                    gt_label = self.cat2label[ann_info['labels'][i]]
 
                     gt_bboxes.append(bbox_rot)
                     gt_labels.append(gt_label)
@@ -1371,8 +1370,7 @@ class KagglePKUDataset(CustomDataset):
     def get_box_and_mask(self, eular_angle, translation, vertices, triangles):
         # project 3D points to 2d image plane
         yaw, pitch, roll = eular_angle
-        # I think the pitch and yaw should be exchanged
-        yaw, pitch, roll = -pitch, -yaw, -roll
+
         Rt = np.eye(4)
         t = translation
         Rt[:3, 3] = t
@@ -1417,7 +1415,7 @@ class KagglePKUDataset(CustomDataset):
         # ground_truth_binary_mask = cv2.erode(ground_truth_binary_mask, kernel, iterations=1)
         return bbox, ground_truth_binary_mask
 
-    def visualise_pred(self, outputs, args):
+    def visualise_pred(self, outputs):#args
         car_cls_coco = 2
 
         for idx in tqdm(range(len(self.annotations))):
@@ -1443,7 +1441,7 @@ class KagglePKUDataset(CustomDataset):
                 # now we start to plot the image from kaggle
                 im_combime, iou_flag = self.visualise_box_mesh(image, bboxes[car_cls_coco], segms[car_cls_coco],
                                                                car_names, euler_angle, trans_pred_world)
-                imwrite(im_combime, os.path.join(args.out[:-4] + '_mes_vis/' + img_name.split('/')[-1]))
+                # imwrite(im_combime, os.path.join(args.out[:-4] + '_mes_vis/' + img_name.split('/')[-1]))
 
     def visualise_pred_single_node(self, idx, outputs, args):
         car_cls_coco = 2
@@ -1668,7 +1666,7 @@ class KagglePKUDataset(CustomDataset):
 
         ea = euler_angle[bbox_idx]
         yaw, pitch, roll = ea[0], ea[1], ea[2]
-        yaw, pitch, roll = -pitch, -yaw, -roll
+
         Rt = np.eye(4)
         Rt[:3, 3] = t
         Rt[:3, :3] = euler_to_Rot(yaw, pitch, roll).T
@@ -1686,7 +1684,7 @@ class KagglePKUDataset(CustomDataset):
         for tri in triangles:
             coord = np.array([img_cor_points[tri[0]][:2], img_cor_points[tri[1]][:2], img_cor_points[tri[2]][:2]],
                              dtype=np.int32)
-            coord[:, 1] -= 1480
+            # coord[:, 1] -= 1480
             cv2.drawContours(mask_all_mesh_tmp, np.int32([coord]), 0, 1, -1)
             # cv2.drawContours(img,np.int32([coord]),0,color,-1)
 

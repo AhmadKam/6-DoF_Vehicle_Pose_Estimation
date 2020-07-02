@@ -137,18 +137,22 @@ class HybridTaskCascade(CascadeRCNN):
     def _translation_forward_train(self, sampling_results, scale_factor, car_cls_rot_feat, img_meta):
         pos_bboxes = [res.pos_bboxes for res in sampling_results]
         # TODO: this is a dangerous hack: we assume only one image per batch
-        if len(pos_bboxes) > 1:
+        if len(pos_bboxes) > 1: # Comment for batch size > 1
             raise NotImplementedError("Image batch size 1 is not implement!")
         for im_idx in range(len(pos_bboxes)):
-            device_id = car_cls_rot_feat.get_device()
+            # current_car_cls_rot_feat = car_cls_rot_feat[im_idx] # Uncomment for batch size > 1
+            # device_id = current_car_cls_rot_feat.get_device() # Uncomment for batch size > 1
+            device_id = car_cls_rot_feat.get_device() # Comment for batch size > 1
+            
             if self.translation_head.bbox_relative:
                 ori_shape = img_meta[im_idx]['ori_shape']
                 # then we use relative information instead the absolute world space
                 pred_boxes = self.translation_head.bbox_transform_pytorch_relative(pos_bboxes[im_idx], scale_factor[im_idx], device_id, ori_shape)
             else:
                 pred_boxes = self.translation_head.bbox_transform_pytorch(pos_bboxes[im_idx], scale_factor[im_idx], device_id)
-            trans_pred = self.translation_head(pred_boxes, car_cls_rot_feat)
-
+            # trans_pred = self.translation_head(pred_boxes, current_car_cls_rot_feat) # Uncomment for batch size > 1
+            trans_pred = self.translation_head(pred_boxes, car_cls_rot_feat) # Comment for batch size > 1
+            
             if self.translation_head.translation_bboxes_regression:
                 loss_translation = self.translation_head.get_target_trans_box(sampling_results, trans_pred,
                                                                               pos_bboxes[im_idx], scale_factor[im_idx],
@@ -432,7 +436,6 @@ class HybridTaskCascade(CascadeRCNN):
                 losses['s{}.{}'.format(i, name)] = (value * lw if 'loss' in name else value)
 
             # mask head forward and loss
-         
             if self.with_mask:
                 # interleaved execution: use regressed bboxes by the box branch
                 # to train the mask branch
@@ -578,6 +581,7 @@ class HybridTaskCascade(CascadeRCNN):
                 bbox_result = bbox2result(det_bboxes, det_labels,
                                           bbox_head.num_classes)
                 ms_bbox_result['stage{}'.format(i)] = bbox_result
+
                 if self.with_mask:
                     mask_head = self.mask_head[i]
                     if det_bboxes.shape[0] == 0:
@@ -611,6 +615,7 @@ class HybridTaskCascade(CascadeRCNN):
         bbox_result = bbox2result(det_bboxes, det_labels,
                                   self.bbox_head[-1].num_classes)
         ms_bbox_result['ensemble'] = bbox_result
+
         if self.with_mask:
             if det_bboxes.shape[0] == 0:
                 mask_classes = self.mask_head[-1].num_classes - 1
@@ -715,7 +720,7 @@ class HybridTaskCascade(CascadeRCNN):
             # only one image in the batch
             img_shape = img_meta[0]['img_shape']
             scale_factor = img_meta[0]['scale_factor']
-            flip = img_meta[0]['flip']
+            # flip = img_meta[0]['flip']
 
             proposals = bbox_mapping(proposal_list[0][:, :4], img_shape,
                                      scale_factor, flip)
@@ -769,7 +774,7 @@ class HybridTaskCascade(CascadeRCNN):
                         self.extract_feats(imgs), img_metas, semantic_feats):
                     img_shape = img_meta[0]['img_shape']
                     scale_factor = img_meta[0]['scale_factor']
-                    flip = img_meta[0]['flip']
+                    # flip = img_meta[0]['flip']
                     _bboxes = bbox_mapping(det_bboxes[:, :4], img_shape,
                                            scale_factor, flip)
                     mask_rois = bbox2roi([_bboxes])

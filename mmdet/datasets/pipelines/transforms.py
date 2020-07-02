@@ -130,7 +130,7 @@ class Resize(object):
             bboxes = results[key] * results['scale_factor']
             bboxes[:, 0::2] = np.clip(bboxes[:, 0::2], 0, img_shape[1] - 1)
             bboxes[:, 1::2] = np.clip(bboxes[:, 1::2], 0, img_shape[0] - 1)
-            results[key] = bboxes
+            results[key] = bboxes            
 
     def _resize_masks(self, results):
         for key in results.get('mask_fields', []):
@@ -155,6 +155,7 @@ class Resize(object):
             self._random_scale(results)
         self._resize_img(results)
         self._resize_bboxes(results)
+        img = results['img']
         self._resize_masks(results)
         return results
 
@@ -179,8 +180,8 @@ class RandomFlip(object):
     """
 
     def __init__(self, flip_ratio=None):
-        self.delta_x = 1692 - 1686.2379
-        self.fx = 2304.5479
+        self.delta_x = 1692-1692
+        self.fx = 3701.25
         self.flip_ratio = flip_ratio
         if flip_ratio is not None:
             assert flip_ratio >= 0 and flip_ratio <= 1
@@ -202,13 +203,16 @@ class RandomFlip(object):
         # Flip need to be the the results keys.
         flip = True if np.random.rand() < self.flip_ratio else False
         results['flip'] = flip
+
         if results['flip']:
             # flip image
             results['img'] = mmcv.imflip(results['img'])
+
             # flip bboxes
             for key in results.get('bbox_fields', []):
                 results[key] = self.bbox_flip(results[key],
                                               results['img_shape'])
+ 
             # flip masks
             for key in results.get('mask_fields', []):
                 results[key] = [mask[:, ::-1] for mask in results[key]]
@@ -271,6 +275,7 @@ class Pad(object):
         elif self.size_divisor is not None:
             padded_img = mmcv.impad_to_multiple(
                 results['img'], self.size_divisor, pad_val=self.pad_val)
+
         results['img'] = padded_img
         results['pad_shape'] = padded_img.shape
         results['pad_fixed_size'] = self.size
@@ -514,8 +519,8 @@ class SegResizeFlipPadRescale(object):
                 results['gt_semantic_seg'],
                 results['scale'],
                 interpolation='nearest')
-        if results['flip']:
-            gt_seg = mmcv.imflip(gt_seg)
+        # if results['flip']:
+        #     gt_seg = mmcv.imflip(gt_seg)
         if gt_seg.shape != results['pad_shape']:
             gt_seg = mmcv.impad(gt_seg, results['pad_shape'][:2])
         if self.scale_factor != 1:

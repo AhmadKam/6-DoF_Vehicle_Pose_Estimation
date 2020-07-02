@@ -1,5 +1,6 @@
 import warnings
 import math
+from mathutils import Matrix, Vector
 
 import matplotlib.pyplot as plt
 import mmcv
@@ -10,6 +11,7 @@ import copy
 
 from mmcv.image import imread, imwrite
 from mmcv.visualization.color import color_val
+
 
 from mmdet.datasets.kaggle_pku_utils import euler_to_Rot, euler_angles_to_quaternions, \
     quaternion_upper_hemispher, euler_angles_to_rotation_matrix, quaternion_to_euler_angle, draw_line, draw_points
@@ -325,7 +327,6 @@ def get_iou_score(bbox_idx, car_model_dict, camera_matrix, class_names,
 
     ea = euler_angle[bbox_idx]
     yaw, pitch, roll = ea[0], ea[1], ea[2]
-    yaw, pitch, roll = -pitch, -yaw, -roll
     Rt = np.eye(4)
     Rt[:3, 3] = t
     Rt[:3, :3] = euler_to_Rot(yaw, pitch, roll).T
@@ -523,7 +524,6 @@ def get_IOU(img_original, bboxes, segms, six_dof, car_id2name,
 
         ea = euler_angles[bbox_idx]
         yaw, pitch, roll = ea[0], ea[1], ea[2]
-        yaw, pitch, roll = -pitch, -yaw, -roll
         Rt = np.eye(4)
         Rt[:3, 3] = t
         Rt[:3, :3] = euler_to_Rot(yaw, pitch, roll).T
@@ -550,17 +550,20 @@ def get_IOU(img_original, bboxes, segms, six_dof, car_id2name,
     return bboxes_with_IOU
 
 
-def draw_box_mesh_kaggle_pku(img_original, bboxes, segms, class_names,
+def draw_box_mesh_kaggle_pku(name, img_original, bboxes, segms, class_names,
                              car_model_dict,
                              camera_matrix,
+                             all_imgs_coords_points,
                              trans_pred_world,
                              euler_angle,
-                             score_thr=0.8,
-                             thickness=1,
+                             score_thr=0.4,
+                             thickness=5,
                              transparency=0.5,
                              font_scale=0.8,
                              ):
-    img = img_original[1480:, :, :].copy()  ## crop half
+
+    # img = img_original[1480:, :, :].copy()  ## crop half
+    img = img_original[:, :, :].copy()
 
     iou_flag = False
     trans_pred_world_raw = trans_pred_world.copy()
@@ -573,6 +576,7 @@ def draw_box_mesh_kaggle_pku(img_original, bboxes, segms, class_names,
         class_names = class_names[inds]
 
     for bbox_idx in range(len(bboxes)):
+        
         color_ndarray = np.random.randint(0, 256, (1, 3), dtype=np.uint8)
         color = tuple([int(i) for i in color_ndarray[0]])
         bbox = bboxes[bbox_idx]
@@ -581,6 +585,8 @@ def draw_box_mesh_kaggle_pku(img_original, bboxes, segms, class_names,
         mask_all_pred = np.zeros(img.shape[:-1])  ## this is the background mask
         mask_all_mesh = np.zeros(img.shape[:-1])
         mask_pred = maskUtils.decode(segms[bbox_idx]).astype(np.bool)
+        # m = mask_pred*255/mask_pred.max()
+
         mask_all_pred += mask_pred
         mask_all_pred_area = np.sum(mask_all_pred == 1)
         # img[mask_pred] = img[mask_pred] * (1-transparency) + color_ndarray * transparency
@@ -593,32 +599,57 @@ def draw_box_mesh_kaggle_pku(img_original, bboxes, segms, class_names,
 
         ## time to draw mesh
         vertices = np.array(car_model_dict[class_names[bbox_idx]]['vertices'])
-        vertices[:, 1] = -vertices[:, 1]
+        # vertices[:, 1] = -vertices[:, 1]
         triangles = np.array(car_model_dict[class_names[bbox_idx]]['faces']) - 1
 
         ea = euler_angle[bbox_idx]
         yaw, pitch, roll = ea[0], ea[1], ea[2]
-        yaw, pitch, roll = -pitch, -yaw, -roll
         Rt = np.eye(4)
         Rt[:3, 3] = t
-        Rt[:3, :3] = euler_to_Rot(yaw, pitch, roll).T
-        Rt = Rt[:3, :]
+        # Rt[:3, :3] = euler_to_Rot(yaw, pitch, roll).T
+        Rt[:3, :3] = [[0.1556,0.9878,-0.01],[-0.9857,0.1559,0.0636],[0.0644,0.0001,0.9979]]
+        # Rt[:3, 3] = (-Rt[:3, :3].T) @ t
+        # Rt[:3, :3] = Rt[:3, :3].T
+
         P = np.ones((vertices.shape[0], vertices.shape[1] + 1))
         P[:, :-1] = vertices
-        P = P.T
+        P = P.T      
 
-        img_cor_points = np.dot(camera_matrix, np.dot(Rt, P))
-        img_cor_points = img_cor_points.T
-        img_cor_points[:, 0] /= img_cor_points[:, 2]
-        img_cor_points[:, 1] /= img_cor_points[:, 2]
+        # img_cor_points = np.dot(camera_matrix, np.dot(Rt, P))
+        # img_cor_points = img_cor_points.T
+        # print(img_cor_points[0])
+        # img_cor_points = np.matmul(camera_matrix,np.matmul(Rt,P))
+        # img_cor_points = camera_matrix @ Rt[:3,:] @ P
+        cam_cor_points = Rt @ P
+        cam_cor_points = cam_cor_points.T
+        print(cam_cor_points.shape)
+
+        cam_cor_points[:, 0] /= cam_cor_points[:, 2]
+        cam_cor_points[:, 1] /= cam_cor_points[:, 2]
+        # img_cor_points = img_cor_points.T
+
+        img_cor_points = np.zeros((cam_cor_points.shape[0],2))
+        # print(img_cor_points.shape)
+        img_cor_points[:,0] = 3701.25*cam_cor_points[:, 0]+1692.0
+        img_cor_points[:,1] = 2391.6667*cam_cor_points[:, 1]+615.0
+
+        # img_cor_points[:, 0] /= img_cor_points[:, 2]
+        # img_cor_points[:, 1] /= img_cor_points[:, 2]
+
+        # print(img_cor_points[77])
+        # print(img_cor_points[0])
+        img_cor_points = all_imgs_coords_points[name]
+        # print(img_cor_points[0])
 
         for tri in triangles:
             coord = np.array([img_cor_points[tri[0]][:2], img_cor_points[tri[1]][:2], img_cor_points[tri[2]][:2]],
                              dtype=np.int32)
-            coord[:, 1] -= 1480
             cv2.polylines(img, np.int32([coord]), 1, color, thickness=1)
             cv2.drawContours(mask_all_mesh, np.int32([coord]), 0, 1, -1)
-            # cv2.drawContours(img,np.int32([coord]),0,color,-1)
+            # cv2.drawContours(img,np.int32([coord]),0,color,-1) # plots a filled mask
+
+        # Plots segmentation
+        m = mask_all_pred*255/mask_all_pred.max()
 
         intersection_area = np.sum(mask_all_pred * mask_all_mesh)
         union_area = np.sum(np.logical_or(mask_all_pred, mask_all_mesh))
@@ -631,24 +662,17 @@ def draw_box_mesh_kaggle_pku(img_original, bboxes, segms, class_names,
             print('iou_score', iou_score, cls_score)
 
             iou_flag = True
-        # for i in ea:
-        #     i = round(i,4)
-        #     label_text_t += str(i)
-        #     label_text_t += ' '
-        #
-        # for i in t:
-        #     i = round(i,4)
-        #     label_text_t += str(i)
-        #     label_text_t += ' '
-        # label_text_t += str(iou_mask_score) + ' ' + str(iou_score) + ' ' + str(cls_score)
-        label_text_t += str(iou_score) + ' ' + str(cls_score)
+
+        label_text_t += 'Mask IoU:' + str(iou_score) + ' ' + 'Class/BBox:' + str(cls_score)
+        # label_text_t += str(iou_score) + ' ' + str(cls_score)
+
         cv2.rectangle(img, left_top, right_bottom, color, thickness=thickness)
         if len(bbox) > 4:
             label_text += '|{:.02f}'.format(bbox[-1])
         cv2.putText(img, label_text_t, (bbox_int[0], bbox_int[1] - 2),
-                    cv2.FONT_ITALIC, font_scale, color)
+                    cv2.FONT_ITALIC, font_scale, color,thickness=2)
     im_combime = img_original.copy()
-    im_combime[1480:, :, :] = img
+    im_combime[:, :, :] = img
     return im_combime, iou_flag
 
 
@@ -771,7 +795,6 @@ def imdraw_det_bboxes(img,
         t = trans_pred_world[bbox_idx]
         ea = euler_angle[bbox_idx]
         yaw, pitch, roll = ea[0], ea[1], ea[2]
-        yaw, pitch, roll = -pitch, -yaw, -roll
         Rt = np.eye(4)
         Rt[:3, 3] = t
         Rt[:3, :3] = euler_to_Rot(yaw, pitch, roll).T

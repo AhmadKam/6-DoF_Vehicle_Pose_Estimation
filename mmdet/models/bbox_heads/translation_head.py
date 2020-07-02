@@ -60,7 +60,7 @@ class FCTranslationHead(nn.Module):
             self.trans_pred = nn.Linear(fc_out_channels + fc_out_channels, num_translation_reg)
 
         # camera intrinsic also is saved here:
-        self.fx, self.cx, self.fy, self.cy = 2304.5479, 1686.2379, 2305.8757, (2710 - 1480) / 2
+        self.fx, self.cx, self.fy, self.cy = 3701.25, 1692.0, 2391.6667, 615.0
         # translation mean and std:
         self.t_x_mean, self.t_y_mean, self.t_z_mean = -3, 9, 50
         self.t_x_std, self.t_y_std, self.t_z_std = 14.015, 4.695, 29.596
@@ -80,9 +80,16 @@ class FCTranslationHead(nn.Module):
         x_bbox_feat = self.relu(self.bboxes_linear_2(x_bbox_feat))
 
         x_carclsrot_feat = self.relu(self.car_cls_rot_linear(x_car_cls_rot))
-
-        x_merge = self.relu(torch.cat((x_bbox_feat, x_carclsrot_feat), dim=1))
-
+        x_merge = self.relu(torch.cat((x_bbox_feat, x_carclsrot_feat),dim=1))
+         
+        # TODO: Uncomment this section for batch size > 1 (requires commenting x_merge above)
+        # if len(x_bbox_feat.shape) == 2 and x_bbox_feat.shape[0] != 1:
+        #     x_merge = self.relu(torch.cat((x_bbox_feat[1], x_carclsrot_feat)))
+        # elif x_bbox_feat.shape[0] == 1:
+        #     x_merge = self.relu(torch.cat((x_bbox_feat.squeeze(), x_carclsrot_feat)))
+        # elif len(x_bbox_feat.shape) == 1:
+        #     x_merge = self.relu(torch.cat((x_bbox_feat, x_carclsrot_feat),dim=1))
+        
         trans_pred = self.trans_pred(x_merge)
         return trans_pred
 
@@ -117,8 +124,8 @@ class FCTranslationHead(nn.Module):
         # Now we find the IoU > iou_thresh
         boxes = self.bboxes_with_translation_pick.copy()
         # Because we crop the bottom
-        boxes[:, 1] -= 1480
-        boxes[:, 3] -= 1480
+        # boxes[:, 1] -= 1480
+        # boxes[:, 3] -= 1480
 
         x1 = boxes[:, 0]
         y1 = boxes[:, 1]
@@ -313,8 +320,8 @@ class FCTranslationHead(nn.Module):
         # Now we find the IoU > iou_thresh
         boxes = self.bboxes_with_translation_pick.copy()
         # Because we crop the bottom
-        boxes[:, 1] -= 1480
-        boxes[:, 3] -= 1480
+        # boxes[:, 1] -= 1480
+        # boxes[:, 3] -= 1480
 
         x1 = boxes[:, 0]
         y1 = boxes[:, 1]

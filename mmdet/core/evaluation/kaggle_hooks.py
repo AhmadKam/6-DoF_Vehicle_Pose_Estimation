@@ -1,4 +1,4 @@
-import os
+import os, sys
 import os.path as osp
 
 import mmcv
@@ -16,11 +16,15 @@ from sklearn.metrics import average_precision_score
 from multiprocessing import Pool
 from . import DistEvalHook
 
+sys.path.append('/data/ahkamal/6-DoF_Vehicle_Pose_Estimation_Through_Deep_Learning/')
+from tools.visualise_pred import visualise_pred
+
 from mmdet.utils import check_match, coords2str, expand_df
 
 
-def match(t):
-    return check_match(*t[0])
+def match(avg_tr_er):
+    # print(*avg_tr_er[0])
+    return check_match(*avg_tr_er[0])
 
 
 class KaggleEvalHook(DistEvalHook):
@@ -36,14 +40,16 @@ class KaggleEvalHook(DistEvalHook):
         super(KaggleEvalHook, self).__init__(dataset, interval)
 
     def evaluate(self, runner, results):
+        
         predictions = {}
 
         CAR_IDX = 2  # this is the coco car class
         for idx_img, output in enumerate(results):
             # Wudi change the conf to car prediction
             conf = output[0][CAR_IDX][:, -1]  # output [0] is the bbox
-            idx = conf > self.conf_thresh
 
+            idx = conf > self.conf_thresh 
+            
             file_name = os.path.basename(output[2]["file_name"])
             ImageId = ".".join(file_name.split(".")[:-1])
 
@@ -53,35 +59,108 @@ class KaggleEvalHook(DistEvalHook):
             coords = np.hstack((euler_angle[idx], translation[idx], conf[idx, None]))
             coords_str = coords2str(coords)
             predictions[ImageId] = coords_str
-
+            
         pred_dict = {'ImageId': [], 'PredictionString': []}
         for k, v in predictions.items():
             pred_dict['ImageId'].append(k)
             pred_dict['PredictionString'].append(v)
 
         pred_df = pd.DataFrame(data=pred_dict)
-        #pred_df.to_csv('/data/Kaggle/train_df.csv', index=False)
-        gt_df = pd.read_csv(self.ann_file)
-        expanded_train_df = expand_df(gt_df, ['model_type', 'pitch', 'yaw', 'roll', 'x', 'y', 'z'])
+        gt_df = pd.read_csv('/home/ahkamal/Desktop/rendered_image/Cam.000/_val.csv')
+        expanded_train_df = expand_df(gt_df, ['model_type', 'yaw', 'pitch', 'roll', 'x', 'y', 'z'])
+
         # get the number of cars
-        num_cars_gt = len(expanded_train_df)
+        num_cars_gt = len(expanded_train_df) # total number of cars in val dataset
         ap_list = []
 
-        max_workers = 10
+        max_workers = 10 
         p = Pool(processes=max_workers)
 
-        for result_flg, scores in p.imap(match,
-                                         zip([(i, gt_df, pred_df) for i in range(10)])):
+        avg_tr_er = []
+        max_tr_er = []
+        min_tr_er = []
+
+        avg_rot_er = []
+        max_rot_er = []
+        min_rot_er = []
+
+        avg_score = []
+
+        for result_flg, scores, predicted_tp, mean_tr_error, max_tr_error, min_tr_error, mean_rot_error,\
+            max_rot_error, min_rot_error in p.imap(match, zip([(i, gt_df, pred_df) for i in range(1)])): # based on number of thresholds given
             if np.sum(result_flg) > 0:
-                n_tp = np.sum(result_flg)
+                n_tp = np.sum(result_flg) # number of true positives detected
                 recall = n_tp / num_cars_gt
-                ap = average_precision_score(result_flg, scores) * recall
-            else:
-                ap = 0
-            ap_list.append(ap)
-        mean_ap = np.mean(ap_list)
-        print('{} Valid 400 images mAP is: {}'.format(self.dataset_name, mean_ap))
+                # ap = average_precision_score(result_flg, scores) * recall
+
+            # else:
+            #     ap = 0
+
+            """
+            For range of thresholds
+            """
+        #     if mean_tr_error and max_tr_error and min_tr_error\
+        #     and mean_rot_error and max_rot_error and min_rot_error:
+        #         avg_tr_er.append(mean_tr_error)
+        #         max_tr_er.append(max_tr_error)
+        #         min_tr_er.append(min_tr_error)
+
+        #         avg_rot_er.append(mean_rot_error)
+        #         max_rot_er.append(max_rot_error)
+        #         min_rot_er.append(min_rot_error)
+
+        #         avg_score.append(scores)
+
+        #     ap_list.append(ap)
+
+        # mean_ap = np.mean(ap_list)
+
+        # if avg_tr_er and avg_rot_er:
+        #     print("\nAvg translation error: {}m".format(round(np.mean(avg_tr_er),3)))
+        #     print("Min T error: {} - Max T error: {}\n".format(min(min_tr_er), max(max_tr_er)))
+        #     print("Avg rotation error: {}deg".format(round(np.mean(avg_rot_er),3)))
+        #     print("Min R error: {} - Max R error: {}".format(min(min_rot_er), max(max_rot_er)))
+        #     print("Avg network confidence (bbox pred): {}%\n".format(round(np.mean(avg_score),3)*100))
+        #     print('Val {} images mAP is: {}% ({} images)\n'.format(num_cars_gt, round(mean_ap,3)*100,\
+                # np.floor(num_cars_gt*recall).astype('int')))
+                
+                # with open('/home/ahkamal/Desktop/mAP_log.txt','a') as file:
+                #     file.write('{}'.format(mean_ap))
+                #     file.write("\n")
+                # file.close()
+
+                # key = 'mAP/{}'.format(self.dataset_name)
+                # runner.log_buffer.output[key] = mean_ap
+                # runner.log_buffer.ready = True
+
+
+        """
+        For single threshold
+        """
+        if predicted_tp and mean_tr_error and max_tr_error\
+        and min_tr_error and mean_rot_error and max_rot_error and min_rot_error:
+            print("\nAvg translation error: {}m".format(round(mean_tr_error,3)))
+            print("Min T error: {}m - Max T error: {}m\n".format(min_tr_error, max_tr_error))
+            print("Avg rotation error: {}deg".format(round(mean_rot_error,3)))
+            print("Min R error: {}deg - Max R error: {}deg".format(min_rot_error, max_rot_error))
+            print("Avg network confidence (bbox pred): {}%\n".format(round(np.mean(scores),2)*100))
+            print('Val {} images mAP is: {}% ({} images)\n'.format(num_cars_gt, round(recall,3)*100,\
+                np.floor(num_cars_gt*recall).astype('int')))
+
+        else:
+            print('No TP predicted!')
+            recall = 0.0
+
+        """
+        Records mAP to txt file for every epoch
+        (used to plot training loss curve in Tensorboard)
+        """
+        with open('/home/ahkamal/Desktop/mAP_log.txt','a') as file:
+            file.write('{}'.format(recall))
+            file.write("\n")
+        file.close()
+
         key = 'mAP/{}'.format(self.dataset_name)
-        runner.log_buffer.output[key] = mean_ap
+        runner.log_buffer.output[key] = recall
         runner.log_buffer.ready = True
 
