@@ -33,8 +33,9 @@ Label = namedtuple('Label', [
 # Make sure to provide your results using the original IDs and not the training IDs.
 # Note that many IDs are ignored in evaluation and thus you never need to predict these!
 
+# categoryID: 1 --> sedan | categoryID: 2 --> SUV
 models = [
-    #     name          id   is_valid  category  categoryId
+    #                   name                    id       category  categoryId
     Label(           'mercedes-vito-van',         79,      'van',          3),
 
 ]
