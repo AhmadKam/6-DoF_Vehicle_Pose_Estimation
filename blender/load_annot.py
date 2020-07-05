@@ -107,7 +107,6 @@ def quaternion_to_euler_angle(q):
     """
     Convert quaternion to euler angel.
     yaw, pitch, roll
-
     Input:
         q: 1 * 4 vector,
     Output:
@@ -146,7 +145,7 @@ def _str2coords(s, names=('id', 'yaw', 'pitch', 'roll', 'x', 'y', 'z')):
 	return coords
 
 
-def load_anno_idx(root_dir, dataset_name, idx, ds_csv, all_imgs_coords_points, draw=False, draw_dir=None):
+def load_anno_idx(root_dir, ds_dir, dataset_name, idx, ds_csv, all_imgs_coords_points, draw=False, draw_dir=None):
 	
     draw_dir='{}/mask_samples/'.format(root_dir)
 
@@ -156,6 +155,7 @@ def load_anno_idx(root_dir, dataset_name, idx, ds_csv, all_imgs_coords_points, d
     bottom_half = 0
     image_shape = (1230, 3384)
     img_prefix = '{}/rendered_image/Cam.000/{}/'.format(root_dir,dataset_name)
+    img_prefix_cluster = '{}/{}/'.format(ds_dir,dataset_name)
     img_format = '.png'
 
 
@@ -167,6 +167,7 @@ def load_anno_idx(root_dir, dataset_name, idx, ds_csv, all_imgs_coords_points, d
     translations = []
     
     img_name = img_prefix + ds_csv['ImageId'].iloc[idx] + img_format
+    img_name_cluster = img_prefix_cluster + ds_csv['ImageId'].iloc[idx] + img_format
     
     car_model_dir = os.path.join(root_dir, 'car_models_json')
     car_model_dict = {}
@@ -214,7 +215,6 @@ def load_anno_idx(root_dir, dataset_name, idx, ds_csv, all_imgs_coords_points, d
                                                                                     0].max(), img_coords_points[:,
                                                                                             1].max()
             bboxes.append([x1, y1, x2, y2])
-
             
             if draw:
                 # project 3D points to 2d image plane
@@ -270,7 +270,7 @@ def load_anno_idx(root_dir, dataset_name, idx, ds_csv, all_imgs_coords_points, d
             assert len(gt) == len(bboxes) == len(labels) == len(eular_angles) == len(quaternion_semispheres) == len(translations)
             
             annotation = OrderedDict([
-                ('filename', img_name),
+                ('filename', img_name_cluster),
                 ('width', image_shape[1]),
                 ('height', image_shape[0]),
                 ('bboxes', bboxes.tolist()),
@@ -280,10 +280,12 @@ def load_anno_idx(root_dir, dataset_name, idx, ds_csv, all_imgs_coords_points, d
                 ('translations', translations.tolist()),
                 ('rles', [OrderedDict([('size',rles[0]['size']),('counts',str(rles[0]['counts']))])])
             ])
+
             return annotation
     
 
-def load_annot(root_dir):
+def load_annot(root_dir, ds_dir):
+
     datasets = ['train','val','test']
     all_imgs_coords_points = np.load('{}/rendered_image/all_imgs_coords_points.npz'.format(root_dir))
 
@@ -292,7 +294,7 @@ def load_annot(root_dir):
         ds_csv = pd.read_csv('{}/rendered_image/Cam.000/_{}.csv'.format(root_dir,i))
         print('\nWriting {} DS Annoations\n'.format(i))
         for j in tqdm(range(len(ds_csv))):
-            annotation = load_anno_idx(root_dir, i, j, ds_csv, all_imgs_coords_points, draw=True)
+            annotation = load_anno_idx(root_dir, ds_dir, i, j, ds_csv, all_imgs_coords_points, draw=True)
             all_annots.append(annotation)
 
         with open('{}/rendered_image/Cam.000/_{}.json'.format(root_dir,i),'w') as file:
