@@ -3,6 +3,8 @@ import os
 import re
 import numpy as np
 from collections import OrderedDict
+import glob
+import shutil
 
 import torch
 from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
@@ -15,27 +17,9 @@ from mmdet.datasets import DATASETS, build_dataloader
 from mmdet.models import RPN
 from .env import get_root_logger
 
+from configs.htc.htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi import work_dir,\
+                                                                                ds_dir, resume_from
 
-# def parse_losses(total_losses):
-#     log_vars = OrderedDict()
-#     for total_keys in total_losses.keys():
-#         losses = total_losses[total_keys]
-#         log_vars[total_keys] = dict()
-#         for loss_name, loss_value in losses.items():
-#             if isinstance(loss_value, torch.Tensor):
-#                 log_vars[total_keys][loss_name] = loss_value.mean()
-#             elif isinstance(loss_value, list):
-#                 log_vars[total_keys][loss_name] = sum(_loss.mean() for _loss in loss_value)
-#             else:
-#                 raise TypeError('{} is not a tensor or list of tensors'.format(loss_name))
-#
-#         loss = sum(_value for _key, _value in log_vars[total_keys].items() if 'loss' in _key)
-#
-#         log_vars[total_keys]['loss'] = loss
-#     # for name in log_vars['htc_losses']:
-#     #     log_vars[name] = log_vars[name].item()
-#
-#     return loss, log_vars
 
 def parse_losses(losses):
 
@@ -43,8 +27,8 @@ def parse_losses(losses):
     for loss_name, loss_value in losses.items():
        
         if isinstance(loss_value, torch.Tensor):
-            # if 'car' not in loss_name.split('_') and 'cls' not in loss_name.split('_'):
-            log_vars[loss_name] = loss_value.mean()
+            if 'car_cls' not in loss_name:
+                log_vars[loss_name] = loss_value.mean()
             
         elif isinstance(loss_value, list):
             log_vars[loss_name] = sum(_loss.mean() for _loss in loss_value)
@@ -54,19 +38,31 @@ def parse_losses(losses):
     loss = sum(_value for _key, _value in log_vars.items() if 'loss' in _key)
 
     log_vars['loss'] = loss
-
+ 
     """
     Records losses to txt file
     (used to plot trainig loss curve in Tensorboard)
     """
-    epoch_loss_log = '/home/ahkamal/Desktop/epoch_losses.log'
-    all_epoch_losses = '/home/ahkamal/Desktop/all_epoch_losses.log'
+    files_list = glob.glob('{}*'.format(work_dir))
+    current_dir = max(files_list,key=os.path.getctime)
+    
+    all_epoch_losses = '{}/all_epoch_losses.log'.format(current_dir)
+    epoch_loss_log = '{}/epoch_losses.log'.format(current_dir)
 
-    transl_loss_log = '/home/ahkamal/Desktop/transl_losses.log'
-    all_transl_losses = '/home/ahkamal/Desktop/all_transl_losses.log'
+    all_transl_losses = '{}/all_transl_losses.log'.format(current_dir)
+    transl_loss_log = '{}/transl_losses.log'.format(current_dir)
 
-    rot_loss_log = '/home/ahkamal/Desktop/rot_losses.log'
-    all_rot_losses = '/home/ahkamal/Desktop/all_rot_losses.log'
+    all_rot_losses = '{}/all_rot_losses.log'.format(current_dir)
+    rot_loss_log = '{}/rot_losses.log'.format(current_dir)
+    
+    # Moves previous losses to new directory if training is accidentally interrupted
+    if resume_from:
+        prev_dir = os.path.dirname(resume_from)
+        shutil.copy('{}/epoch_losses.log'.format(prev_dir),current_dir)
+        shutil.copy('{}/transl_losses.log'.format(prev_dir),current_dir)
+        shutil.copy('{}/rot_losses.log'.format(prev_dir),current_dir)
+        shutil.copy('{}/mAP_log.txt'.format(prev_dir),current_dir)
+
 
     # training loss
     with open(all_epoch_losses,'a') as file:
@@ -90,7 +86,7 @@ def parse_losses(losses):
     num_transl_losses = open(all_transl_losses,'r').readlines()
     num_rot_losses = open(all_rot_losses,'r').readlines()
 
-    num_train = len(os.listdir('/home/ahkamal/Desktop/rendered_image/Cam.000/train/'))
+    num_train = len(os.listdir('{}/train/'.format(ds_dir)))
     
     if len(num_epoch_losses) >= num_train:
         if len(num_epoch_losses) % num_train == 0:
