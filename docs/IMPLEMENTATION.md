@@ -89,8 +89,8 @@ rendered_image
 The directories in the files below need to be set:
 
 1. In the configuration file in [../configs/htc/](../configs/htc/)
-* Set the path to the dataset directory `ds_dir`
-* Set the path to load the HRNet Model in `load_from`
+* Set the path to the dataset directory `ds_dir`.
+* Set the path to load the HRNetV2p model in `load_from`. The model can be found [here](https://drive.google.com/file/d/17qN0pB9Tp0DFBonEgDWx_JRFEfP8wT_E/view?usp=sharing) and needs to be added to [../configs/htc/](../configs/htc/)
 * IF NEETED: Set the path to resume the epoch in `resume_from`.
 
 **NOTE**: 
