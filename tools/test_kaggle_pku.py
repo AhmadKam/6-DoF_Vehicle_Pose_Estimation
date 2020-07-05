@@ -10,6 +10,7 @@ import shutil
 import tempfile
 import pandas as pd
 import numpy as np
+import timeit, time
 from numpy import linalg as LA
 from math import sqrt, log
 import cv2
@@ -30,15 +31,12 @@ from mmdet.apis.train import batch_processor, build_optimizer
 
 from mmdet.datasets.kaggle_pku_utils import euler_to_Rot, quaternion_to_euler_angle, filter_igore_masked_using_RT, filter_output
 from tqdm import tqdm
-from evaluations.map_calculation import map_main
 from multiprocessing import Pool
 
 from visualise_pred import visualise_pred
 from sklearn.metrics import average_precision_score
-import timeit ,time
-# from finetune_RT_NMR import finetune_RT
-# from finetune_RT_NMR_img import finetune_RT
-# from finetune_RT_NMR_iou import fin4etune_RT
+
+from configs.htc.htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi import ds_dir
 
 def single_gpu_test(model, data_loader, show=False):
     model.eval()
@@ -49,19 +47,13 @@ def single_gpu_test(model, data_loader, show=False):
     args = parse_args()
     cfg = Config.fromfile(args.config)
     optimizer = build_optimizer(model, cfg.optimizer)
-    runner = Runner(model, batch_processor, optimizer, cfg.work_dir)
-
+    runner = Runner(model, batch_processor, optimizer, cfg.work_dir, is_test=True)
 
     for i, data in enumerate(data_loader):
 
         with torch.no_grad():
             result = runner.model(return_loss=False, rescale=True, **data)
-            # result = model(return_loss=False, rescale=not show, **data)
         results.append(result)
-
-        # if show:
-            # model.module.show_result(data, result)
-            # visualise_pred(result)
 
         batch_size = data['img'][0].size(0)
         for _ in range(batch_size):
@@ -69,81 +61,15 @@ def single_gpu_test(model, data_loader, show=False):
     return results
 
 
-def multi_gpu_test(model, data_loader, tmpdir=None):
-    print(2)
-    """
-    model.eval()
-    results = []
-    dataset = data_loader.dataset
-    rank, world_size = get_dist_info()
-    if rank == 0:
-        prog_bar = mmcv.ProgressBar(len(dataset))
-    
-    for i, data in enumerate(data_loader):
-        with torch.no_grad():
-            result = model(return_loss=False, rescale=True, **data)
-        results.append(result)
-
-        if rank == 0:
-            batch_size = data['img'][0].size(0)
-            for _ in range(batch_size * world_size):
-                prog_bar.update()
-
-    # collect results from all ranks
-    results = collect_results(results, len(dataset), tmpdir)
-
-    return results
-    """
-
-# def collect_results(result_part, size, tmpdir=None):
-#     rank, world_size = get_dist_info()
-#     # create a tmp dir if it is not specified
-#     if tmpdir is None:
-#         MAX_LEN = 512
-#         # 32 is whitespace
-#         dir_tensor = torch.full((MAX_LEN,),
-#                                 32,
-#                                 dtype=torch.uint8,
-#                                 device='cuda')
-#         if rank == 0:
-#             tmpdir = tempfile.mkdtemp()
-#             tmpdir = torch.tensor(
-#                 bytearray(tmpdir.encode()), dtype=torch.uint8, device='cuda')
-#             dir_tensor[:len(tmpdir)] = tmpdir
-#         dist.broadcast(dir_tensor, 0)
-#         tmpdir = dir_tensor.cpu().numpy().tobytes().decode().rstrip()
-#     else:
-#         mmcv.mkdir_or_exist(tmpdir)
-#     # dump the part result to the dir
-#     mmcv.dump(result_part, osp.join(tmpdir, 'part_{}.pkl'.format(rank)))
-#     dist.barrier()
-#     # collect all parts
-#     if rank != 0:
-#         return None
-#     else:
-#         # load results of all parts from tmp dir
-#         part_list = []
-#         for i in range(world_size):
-#             part_file = osp.join(tmpdir, 'part_{}.pkl'.format(i))
-#             part_list.append(mmcv.load(part_file))
-#         # sort the results
-#         ordered_results = []
-#         for res in zip(*part_list):
-#             ordered_results.extend(list(res))
-#         # the dataloader may pad some samples
-#         ordered_results = ordered_results[:size]
-#         # remove tmp dir
-#         shutil.rmtree(tmpdir)
-#         return ordered_results
-
-def write_submission(estimations, args, dataset, # ADDED - estimations was outputs
+def write_submission(estimations, args, dataset,
                      conf_thresh=0.8,
                      filter_mask=False,
                      horizontal_flip=False,
+                     plot_tp=False,
                      save_tp=False):
     
     img_prefix = dataset.img_prefix
-    submission = args.out.replace('.pkl', '') # ADDED - was pkl format
+    submission = args.out.replace('.pkl', '')
     submission += '_' + img_prefix.split('/')[-1]
     submission += '_conf_' + str(conf_thresh)
 
@@ -158,9 +84,8 @@ def write_submission(estimations, args, dataset, # ADDED - estimations was outpu
 
     CAR_IDX = 2  # this is the coco car class
 
-    # for i, img_name in enumerate(estimations):
     for img_name in estimations:
-        for idx_img, output in tqdm(enumerate(estimations[img_name])): #outputs
+        for idx_img, output in tqdm(enumerate(estimations[img_name])):
             file_name = os.path.basename(output[2]["file_name"])
             ImageId = ".".join(file_name.split(".")[:-1])
 
@@ -169,16 +94,10 @@ def write_submission(estimations, args, dataset, # ADDED - estimations was outpu
                 conf = output[0][CAR_IDX][:, -1]  # output [0] is the bbox
                 """
                 Bbox check
-                """
-                # if output[2]['file_name'] == '/home/ahkamal/Desktop/rendered_image/Cam.000/test/van_Z3.0_s13.7_f88.png':
-                #     bbox_img = mmcv.imread(output[2]['file_name'])
-                #     cv2.rectangle(bbox_img, (int(output[0][CAR_IDX][0][0]), int(output[0][CAR_IDX][0][1])), (int(output[0][CAR_IDX][0][2]), int(output[0][CAR_IDX][0][3])), (0, 0, 255), thickness=5)
-                #     mmcv.imwrite(bbox_img,'/home/ahkamal/Desktop/bboxes/test{}.jpg'.format(idx_img))
-                
+                """               
                 idx_conf = conf > conf_thresh
                 if filter_mask:
                     # this filtering step will takes 2 second per iterations
-                    # idx_keep_mask = filter_igore_masked_images(ImageId[idx_img], output[1][CAR_IDX], img_prefix)
                     idx_keep_mask = filter_igore_masked_using_RT(ImageId, output[2], img_prefix, dataset)
 
                     # the final id should require both
@@ -205,71 +124,10 @@ def write_submission(estimations, args, dataset, # ADDED - estimations was outpu
         pred_dict['PredictionString'].append(v)
 
     
-    ann_file = '/home/ahkamal/Desktop/rendered_image/Cam.000/_test.csv'
+    ann_file = os.path.join(ds_dir, '_test.csv')
     test_gt_annot = pd.read_csv(ann_file)
 
-    num_cars_gt = len(pred_dict['ImageId'])
-
-    """
-    For range of thresholds
-    """
-    # avg_tr_er = []
-    # max_tr_er = []
-    # min_tr_er = []
-
-    # avg_rot_er = []
-    # max_rot_er = []
-    # min_rot_er = []
-
-    # avg_score = []
-    # ap_list = []
-
-    # all_tp = []
-
-    # for i in range(1): # range is number of thresholds given in map_calculation.py
-    #     result_flg, scores, predicted_tp, mean_tr_error, max_tr_error, \
-    #         min_tr_error, mean_rot_error, max_rot_error, min_rot_error = check_match(i,test_gt_annot, pred_dict)
-
-    #     if predicted_tp and mean_tr_error and max_tr_error \
-    #     and min_tr_error and mean_rot_error and max_rot_error and min_rot_error: # applies only to TP preds
-            
-    #         avg_tr_er.append(mean_tr_error)
-    #         max_tr_er.append(max_tr_error)
-    #         min_tr_er.append(min_tr_error)
-
-    #         avg_rot_er.append(mean_rot_error)
-    #         max_rot_er.append(max_rot_error)
-    #         min_rot_er.append(min_rot_error)
-
-    #         avg_score.append(scores)
-
-    #         # need to detect all true postives
-    #         all_tp.extend(predicted_tp) 
-        
-    #     if np.sum(result_flg) > 0:
-    #             n_tp = np.sum(result_flg) # number of true positives detected
-    #             recall = n_tp / num_cars_gt
-    #             ap = average_precision_score(result_flg, scores) * recall
-
-    #     else:
-    #         ap = 0
-        
-    #     ap_list.append(ap)
-
-    """
-    Only write TP predictions to csv file (Comment out to write all predictions)
-    """
-    # predicted_tp = []
-    # for i in range(len(result_flg)):
-    #     if result_flg[i] == 1:
-    #         predicted_tp.append(test_gt_annot['ImageId'][i])
-
-    # temp = {'ImageId':[],'PredictionString':[]}
-    # for i, img in enumerate(pred_dict['ImageId']):
-    #     if img in predicted_tp:
-    #         temp['ImageId'].append(pred_dict['ImageId'][i])
-    #         temp['PredictionString'].append(pred_dict['PredictionString'][i])
-    # pred_dict = temp
+    num_cars_gt = len(pred_dict['ImageId'])  
 
     """
     For single threshold
@@ -279,11 +137,7 @@ def write_submission(estimations, args, dataset, # ADDED - estimations was outpu
         
     if np.sum(result_flg) > 0:
         n_tp = np.sum(result_flg) # number of true positives detected
-        recall = n_tp / num_cars_gt
-    #     ap = average_precision_score(result_flg, scores) * recall # needed?
-    # else:
-    #     ap = 0
-    
+        recall = n_tp / num_cars_gt    
     
     """
     Only writes TP predictions to csv file (Comment this section to write all predictions)
@@ -306,13 +160,12 @@ def write_submission(estimations, args, dataset, # ADDED - estimations was outpu
         print("Min T error: {}m - Max T error: {}m\n".format(min_tr_error, max_tr_error))
         print("Avg rotation error: {}deg".format(round(mean_rot_error,3)))
         print("Min R error: {}deg - Max R error: {}deg".format(min_rot_error, max_rot_error))
-        print("Avg network confidence: {}%\n".format(round(np.mean(scores),2)*100))
+        print("Avg network confidence (bbox pred): {}%\n".format(round(np.mean(scores),2)*100))
         print('Test {} images mAP is: {}% ({} images)\n'.format(num_cars_gt, round(recall,3)*100, len(pred_dict['ImageId'])))
 
-    if save_tp and predicted_tp:
-        # visualise_pred(outputs, predicted_tp, save_img=save_tp)
+    if (plot_tp or save_tp) and predicted_tp:
         for img_name in estimations:
-            visualise_pred(estimations[img_name], predicted_tp, save_img=save_tp)
+            visualise_pred(estimations[img_name], predicted_tp, plot=plot_tp,save_img=save_tp)
 
     return submission
 
@@ -371,13 +224,17 @@ def coords2str(coords):
 
 
 def parse_args():
+    repo_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    config_path = os.path.join(repo_path,'configs/htc/')
+
+    checkpoint_path = '/data/ahkamal/output_data/Jun14-22-45(frLeft-10m)/epoch_15.pth'
+    
     parser = argparse.ArgumentParser(description='MMDet test detector')
     parser.add_argument('--config',
-                        default='/data/ahkamal/6-DoF_Vehicle_Pose_Estimation_Through_Deep_Learning/configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
+                        default=os.path.join(config_path,'htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py'),
                         help='train config file path')
-    parser.add_argument('--checkpoint', default='/data/ahkamal/output_data/May21-20-49/epoch_16.pth',
-                        help='checkpoint file')
-    parser.add_argument('--conf', default=0.9, help='Confidence threshold for writing submission') # ADDED - 0.9
+    parser.add_argument('--checkpoint', default=checkpoint_path, help='checkpoint file')
+    parser.add_argument('--conf', default=0.9, help='Confidence threshold for writing submission')
     parser.add_argument('--json_out', help='output result file name without extension', type=str)
     parser.add_argument('--eval', type=str, nargs='+',
                         choices=['proposal', 'proposal_fast', 'bbox', 'segm', 'keypoints', ' kaggle'],
@@ -409,9 +266,10 @@ def main(plot=False,save_img=False):
                                 args.checkpoint.split('/')[-1][:-4] + '_horizontal_flip.pkl')
         print('horizontal_flip activated')
     else:
-        args.out = os.path.join(cfg.work_dir,
-                                cfg.data.test.img_prefix.split('/')[-1].replace('_images', '_') +
-                                args.checkpoint.split('/')[-2] + '_' + args.checkpoint.split('/')[-1][:-4] + '.pkl')
+        args.out = os.path.join(cfg.work_dir,'inference/{}_{}/'.format(args.checkpoint.split('/')[-2],\
+                    args.checkpoint.split('/')[-1].split('.pth')[0]), 
+                    args.checkpoint.split('/')[-2 ]+'_'+\
+                    args.checkpoint.split('/')[-1].split('.pth')[0]+'.pkl')
 
         # set cudnn_benchmark
     if cfg.get('cudnn_benchmark', False):
@@ -434,7 +292,7 @@ def main(plot=False,save_img=False):
         data_loader = build_dataloader(
             dataset,
             imgs_per_gpu=1,
-            workers_per_gpu=0, # ADDED - cfg.data.workers_per_gpu,
+            workers_per_gpu=cfg.data.workers_per_gpu,
             dist=distributed,
             shuffle=False)
         
@@ -453,12 +311,21 @@ def main(plot=False,save_img=False):
         else:
             model.CLASSES = dataset.CLASSES
 
-        ############
+        
         if not distributed:
             estimations = {}
-            pred_imgs_log = cfg.work_dir + 'predicted_images.log'
+            inference_dir = cfg.work_dir + 'inference/{}_{}/'.format(args.checkpoint.split('/')[-2],\
+                            args.checkpoint.split('/')[-1].split('.pth')[0])
+            pred_imgs_log = inference_dir + 'predicted_images.log'
+                            
+            if not os.path.exists(inference_dir):
+                os.makedirs(inference_dir)
+
             if os.path.exists(pred_imgs_log):
                 os.remove(pred_imgs_log)
+            
+            with open(pred_imgs_log,'w'):
+                pass
 
             model = MMDataParallel(model, device_ids=[0])
             input('Press Enter to start pose estimation. (Ctrl+C to stop)\n')
@@ -468,32 +335,31 @@ def main(plot=False,save_img=False):
                     data_loader = build_dataloader(
                         dataset,
                         imgs_per_gpu=1,
-                        workers_per_gpu=0, # ADDED - cfg.data.workers_per_gpu,
+                        workers_per_gpu=cfg.data.workers_per_gpu,
                         dist=distributed,
                         shuffle=False)
 
-                    # TODO: Here
-                    # dataloader_name = data_loader._index_sampler.sampler.data_source.img_infos
-                    # temp = dataloader_name[:]
-                    # if os.path.exists(pred_imgs_log):
-                    #     with open(pred_imgs_log,'r') as file:
-                    #         pred_imgs = file.readlines()
-                    #     file.close()
-                    #     i = 0
-                    #     while i < len(dataloader_name):
-                    #         if (dataloader_name[i]['filename'].split('/')[-1] + '\n') in pred_imgs:
-                    #             temp.pop(i)
-                    #             i = 0
-                    #         else:
-                    #             break
+                    dataloader_name = data_loader._index_sampler.sampler.data_source.img_infos
+                    temp = dataloader_name[:]
+                    if os.path.exists(pred_imgs_log):
+                        with open(pred_imgs_log,'r') as file:
+                            pred_imgs = file.readlines()
+                        file.close()
+                        i = 0
+                        while i < len(dataloader_name):
+                            if (dataloader_name[i]['filename'].split('/')[-1] + '\n') in pred_imgs:
+                                temp.pop(i)
+                                i = 0
+                            else:
+                                break
                                     
-                    #         dataloader_name = temp[:]
+                            dataloader_name = temp[:]
 
-                    # # Check for new images
-                    # if len(dataloader_name) == 0:
-                    #     print("\nPose estimation finished.\n")
-                    #     break
-                    # TODO: Here
+                    # Check for new images
+                    if len(dataloader_name) == 0:
+                        print("\nPose estimation finished.\n")
+                        break
+                
                     outputs = single_gpu_test(model, data_loader, args.show)
         
                     for j in range(len(outputs)):
@@ -504,7 +370,6 @@ def main(plot=False,save_img=False):
                             estimations['all_imgs'] = outputs
                         
                         if plot or save_img:
-                            assert len(outputs) == 1
                             visualise_pred(outputs, plot=plot, save_img=save_img)
                         
                         with open(pred_imgs_log,'a+') as file:
@@ -516,18 +381,11 @@ def main(plot=False,save_img=False):
                     # time.sleep(2) # wait until new image is taken
             except KeyboardInterrupt:
                 pass
-        ###########
-
-        else:
-            model = MMDistributedDataParallel(model.cuda())
-            outputs = multi_gpu_test(model, data_loader, args.tmpdir)
-        
-        # mmcv.dump(outputs, args.out)
-        mmcv.dump(estimations, args.out) # ADDED
+      
+        mmcv.dump(estimations, args.out)
     
     else:
-        # outputs = mmcv.load(args.out)
-        estimations = mmcv.load(args.out) # ADDED
+        estimations = mmcv.load(args.out)
 
     if distributed:
         rank, _ = get_dist_info()
@@ -536,14 +394,12 @@ def main(plot=False,save_img=False):
 
     if cfg.write_submission:
         submission = write_submission(estimations, args, dataset,
-                         conf_thresh=0.8,
+                         conf_thresh=0.8, # bbox threshold
                          filter_mask=False,
                          horizontal_flip=args.horizontal_flip,
-                         save_tp=True)
+                         plot_tp=False, # plots TP predictions
+                         save_tp=False) # saves TP predictions
 
-    if cfg.valid_eval:
-        map_main(submission, flip_model=args.horizontal_flip)
 
 if __name__ == '__main__':
-    main(plot=False) # add save_img=True to save pred images
-    # print('Inference time:{} seconds'.format(timeit.timeit(main,number=1)))
+    main(plot=False,save_img=False) # plot: plots all predictions | save_img: saves all predictions

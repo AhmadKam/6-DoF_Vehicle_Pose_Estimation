@@ -1,5 +1,6 @@
 import os, sys
 import os.path as osp
+import glob
 
 import mmcv
 import numpy as np
@@ -15,11 +16,12 @@ from mmdet.datasets.kaggle_pku_utils import quaternion_to_euler_angle
 from sklearn.metrics import average_precision_score
 from multiprocessing import Pool
 from . import DistEvalHook
+from mmdet.utils import check_match, coords2str, expand_df
 
 sys.path.append('/data/ahkamal/6-DoF_Vehicle_Pose_Estimation_Through_Deep_Learning/')
 from tools.visualise_pred import visualise_pred
 
-from mmdet.utils import check_match, coords2str, expand_df
+from configs.htc.htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi import work_dir, ds_dir
 
 
 def match(avg_tr_er):
@@ -66,7 +68,7 @@ class KaggleEvalHook(DistEvalHook):
             pred_dict['PredictionString'].append(v)
 
         pred_df = pd.DataFrame(data=pred_dict)
-        gt_df = pd.read_csv('/home/ahkamal/Desktop/rendered_image/Cam.000/_val.csv')
+        gt_df = pd.read_csv(os.path.join(ds_dir,'_val.csv'))
         expanded_train_df = expand_df(gt_df, ['model_type', 'yaw', 'pitch', 'roll', 'x', 'y', 'z'])
 
         # get the number of cars
@@ -91,49 +93,7 @@ class KaggleEvalHook(DistEvalHook):
             if np.sum(result_flg) > 0:
                 n_tp = np.sum(result_flg) # number of true positives detected
                 recall = n_tp / num_cars_gt
-                # ap = average_precision_score(result_flg, scores) * recall
-
-            # else:
-            #     ap = 0
-
-            """
-            For range of thresholds
-            """
-        #     if mean_tr_error and max_tr_error and min_tr_error\
-        #     and mean_rot_error and max_rot_error and min_rot_error:
-        #         avg_tr_er.append(mean_tr_error)
-        #         max_tr_er.append(max_tr_error)
-        #         min_tr_er.append(min_tr_error)
-
-        #         avg_rot_er.append(mean_rot_error)
-        #         max_rot_er.append(max_rot_error)
-        #         min_rot_er.append(min_rot_error)
-
-        #         avg_score.append(scores)
-
-        #     ap_list.append(ap)
-
-        # mean_ap = np.mean(ap_list)
-
-        # if avg_tr_er and avg_rot_er:
-        #     print("\nAvg translation error: {}m".format(round(np.mean(avg_tr_er),3)))
-        #     print("Min T error: {} - Max T error: {}\n".format(min(min_tr_er), max(max_tr_er)))
-        #     print("Avg rotation error: {}deg".format(round(np.mean(avg_rot_er),3)))
-        #     print("Min R error: {} - Max R error: {}".format(min(min_rot_er), max(max_rot_er)))
-        #     print("Avg network confidence (bbox pred): {}%\n".format(round(np.mean(avg_score),3)*100))
-        #     print('Val {} images mAP is: {}% ({} images)\n'.format(num_cars_gt, round(mean_ap,3)*100,\
-                # np.floor(num_cars_gt*recall).astype('int')))
                 
-                # with open('/home/ahkamal/Desktop/mAP_log.txt','a') as file:
-                #     file.write('{}'.format(mean_ap))
-                #     file.write("\n")
-                # file.close()
-
-                # key = 'mAP/{}'.format(self.dataset_name)
-                # runner.log_buffer.output[key] = mean_ap
-                # runner.log_buffer.ready = True
-
-
         """
         For single threshold
         """
@@ -155,7 +115,10 @@ class KaggleEvalHook(DistEvalHook):
         Records mAP to txt file for every epoch
         (used to plot training loss curve in Tensorboard)
         """
-        with open('/home/ahkamal/Desktop/mAP_log.txt','a') as file:
+        files_list = glob.glob('{}*'.format(work_dir))
+        current_dir = max(files_list,key=os.path.getctime)
+
+        with open(os.path.join(current_dir,'mAP.log'),'a') as file:
             file.write('{}'.format(recall))
             file.write("\n")
         file.close()

@@ -1,5 +1,3 @@
-import os
-
 # model settings
 model = dict(
     type='HybridTaskCascade',
@@ -126,7 +124,7 @@ model = dict(
         in_channels=256,
         fc_out_channels=1024,
         roi_feat_size=14,
-        num_classes=35,  # There are total 35 car classes # ADDED - 34
+        num_classes=35,
         reg_class_agnostic=True,
         loss_car_cls=dict(type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
         loss_quaternion=dict(type='L1', beta=1.0, loss_weight=1.0)),
@@ -136,7 +134,7 @@ model = dict(
         in_channels_bboxes=4,
         in_channels_carclsrot=1024,
         fc_out_channels=100,
-        num_translation_reg=3, # ADDED - 1629
+        num_translation_reg=3,
         bbox_relative=False,  # if bbox_relative=False, then it requires training/test input the same
         translation_bboxes_regression=False,  # If set to True, we will have a SSD like offset regression
         bboxes_regression=dict(type='maxIoU', iou_thresh=0.1),
@@ -224,9 +222,9 @@ train_cfg = dict(
     ],
     stage_loss_weights=[1, 0.5, 0.25],
 
-    car_cls_weight=1.0,
-    rot_weight=10.,
-    translation_weight=10.,
+    car_cls_weight=1.,
+    rot_weight=8.,
+    translation_weight=2.,
 )
 test_cfg = dict(
     rpn=dict(
@@ -247,59 +245,30 @@ test_cfg = dict(
 dataset_type = 'KagglePKUDataset'
 
 img_norm_cfg = dict(mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
-# Add albumentation transform
-# albu_train_transforms = [
-#     dict(type='RandomBrightnessContrast', brightness_limit=0.2, contrast_limit=0.5, p=0.2),
-#     dict(type='GaussianBlur', blur_limit=20, p=0.1),
-#     dict(type='GaussNoise', var_limit=(10, 80.), p=0.1),
-#     dict(
-#         type='OneOf',
-#         transforms=[
-#             dict(
-#                 type='RGBShift',
-#                 r_shift_limit=30,
-#                 g_shift_limit=30,
-#                 b_shift_limit=30,
-#                 p=0.2),
-#             dict(
-#                 type='HueSaturationValue',
-#                 hue_shift_limit=20,
-#                 sat_shift_limit=20,
-#                 val_shift_limit=20,
-#                 p=0.1)
-#         ],
-#         p=0.1),
-# ]
 
 train_pipeline = [
     dict(type='LoadImageFromFile'),
     dict(type='LoadAnnotations', with_bbox=True, with_mask=True,
-         with_carcls_rot=True, with_translation=True, with_camera_rot=False), # ADDED - camera_rot = False
+         with_carcls_rot=True, with_translation=True, with_camera_rot=False),
     # dict(type='CameraRotation'),
-    # dict(type='CropBottom', bottom_half=200), # ADDED - 1480
-    dict(type='Resize', img_scale=(846,308), keep_ratio=False), # ADDED - keep_ratio=True 1015,369 846,308
-    # dict(type='RandomFlip', flip_ratio=0.),
+    dict(type='Resize', img_scale=(846,308), keep_ratio=False),
+    # dict(type='RandomFlip', flip_ratio=0.5),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='Pad', size_divisor=32),
-    # dict(
-    #     type='Albu',
-    #     transforms=albu_train_transforms,s
-    #     update_pad_shape=False,
-    #     skip_img_without_anno=True),
     dict(type='DefaultFormatBundle'),
     dict(type='Collect',
          keys=['img', 'gt_bboxes', 'gt_labels', 'gt_masks',
                'carlabels', 'quaternion_semispheres', 'translations',
-               'scale_factor']),
+               'scale_factor']), 
 ]
 test_pipeline = [
     dict(type='LoadImageFromFile'),
     dict(
         type='MultiScaleFlipAug',
-        img_scale=(846,308),  # (576, 1600, 3)
+        img_scale=(846,308),
         flip=False,  # test pipelines doest not need this
         transforms=[
-            dict(type='Resize', img_scale=(846,308), keep_ratio=True), # keep_ratio must be True for testing
+            dict(type='Resize', keep_ratio=True), # keep_ratio must be True for testing - img_scale=(846,308),
             # dict(type='RandomFlip', flip_ratio=0.),   # We always want to have this flip_ratio=1.0 for test
             dict(type='Normalize', **img_norm_cfg),
             dict(type='Pad', size_divisor=32),
@@ -308,53 +277,36 @@ test_pipeline = [
         ])
 ]
 
-# data_root = '/data/ahkamal/Kaggle_PKU_Baidu_v1/data/Kaggle/pku-autonomous-driving/'
-data_root = '/home/ahkamal/Desktop/rendered_image/Cam.000/train/'
+ds_dir = '/home/ahkamal/Desktop/rendered_image/Cam.000' # dataset directory
+data_root = '{}/train/'.format(ds_dir)
 data = dict(
     imgs_per_gpu=1, # batch size
     workers_per_gpu=4, #num_workers
     train=dict(
         type=dataset_type,
         data_root=data_root,
-        # ann_file='/data/ahkamal/Kaggle_PKU_Baidu_v1/data/Kaggle/kaggle_apollo_combined_11_origin.json',  # 6691 means the final cleaned data
-        # ann_file='/data/ahkamal/Kaggle_PKU_Baidu_v1/data/Kaggle/_q7.json',
-        ann_file = '/home/ahkamal/Desktop/rendered_image/Cam.000/_train.json',
+        ann_file = '{}/_train.json'.format(ds_dir),
         img_prefix=data_root,
-        # img_prefix=data_root + 'train_images1/',
         pipeline=train_pipeline,
-        rotation_augmenation=False), # ADDED - ROT AUG was True
+        rotation_augmenation=False),
+
     val=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file='/home/ahkamal/Desktop/rendered_image/Cam.000/_val.txt',
-        img_prefix='/home/ahkamal/Desktop/rendered_image/Cam.000/val/',
-        # ann_file='/data/ahkamal/Kaggle_PKU_Baidu_v1/data/Kaggle/pku-autonomous-driving/_val1.txt',
-        # img_prefix='/data/ahkamal/Kaggle_PKU_Baidu_v1/data/Kaggle/pku-autonomous-driving/val1/',
+        ann_file='{}/_val.txt'.format(ds_dir),
+        img_prefix='{}/val/'.format(ds_dir),
         pipeline=test_pipeline),
+
     test=dict(
         type=dataset_type,
         data_root=data_root,
-        # ann_file='/home/ahkamal/Desktop/rendered_image/Cam.000/_test.csv',
         ann_file = '',
-        #ann_file='/home/ahmad/Desktop/Kaggle_PKU_Baidu/data/Kaggle/ApolloScape_3D_car/train/split/validation-list.txt',
-        #img_prefix='/home/ahmad/Desktop/Kaggle_PKU_Baidu/data/Kaggle/pku-autonomous-driving/validation_images_RandomBrightnessContrast',  # valid variation
-        #img_prefix='/home/ahmad/Desktop/Kaggle_PKU_Baidu/data/Kaggle/pku-autonomous-driving/validation_images_RGBShift',  # valid variation
-        #img_prefix='/home/ahmad/Desktop/Kaggle_PKU_Baidu/data/Kaggle/pku-autonomous-driving/validation_images_JpegCompression',  # valid variation
-        #img_prefix='/home/ahmad/Desktop/Kaggle_PKU_Baidu/data/Kaggle/pku-autonomous-driving/validation_images_GaussianBlur',  # valid variation
-        #img_prefix='/home/ahmad/Desktop/Kaggle_PKU_Baidu/data/Kaggle/pku-autonomous-driving/validation_images_GaussNoise',  # valid variation
-        #img_prefix='/home/ahmad/Desktop/Kaggle_PKU_Baidu/data/Kaggle/pku-autonomous-driving/validation_images_RandomContrast',  # valid variation
-        #img_prefix='/home/ahmad/Desktop/Kaggle_PKU_Baidu/data/Kaggle/pku-autonomous-driving/validation_images_HueSaturationValue',  # valid variation
-        #img_prefix='/home/ahmad/Desktop/Kaggle_PKU_Baidu/data/Kaggle/pku-autonomous-driving/validation_images_CLAHE',  # valid variation
-        #img_prefix='/home/ahmad/Desktop/Kaggle_PKU_Baidu/data/Kaggle/pku-autonomous-driving/validation_images',  # We create 400 validation images
-
-        # img_prefix = '/home/ahkamal/Desktop/rendered_image/Cam.000/test/',
-        img_prefix = '/home/ahkamal/Desktop/rendered_image/Cam.000/test/',
-        # img_prefix='/data/ahkamal/Kaggle_PKU_Baidu_v1/data/Kaggle/pku-autonomous-driving/val1/',
+        img_prefix = '{}/test/'.format(ds_dir),
         pipeline=test_pipeline))
 
 
 evaluation = dict(
-    conf_thresh=0.8,
+    conf_thresh=0.8, # for validation
     interval=1,
 )
 # optimizer
@@ -367,29 +319,26 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=500,
     warmup_ratio=1.0 / 3,
-    step=[80,180]) # ADDED - 80 180 - 10 22 - 22 27
+    step=[12, 14])
 checkpoint_config = dict(interval=1)
-# yapf:disable0
+
 log_config = dict(
     interval= 500,
     hooks=[
         dict(type='TextLoggerHook'),
-        dict(type='TensorboardLoggerHook')
+    #     dict(type='TensorboardLoggerHook')
     ])
-# yapf:enable
+
 # runtime settings
-total_epochs = 200 # number of epochs
+total_epochs = 15 # number of epochs
 #dist_params = dict(backend='nccl')
 dist_params = dict(backend='nccl', init_method="tcp://127.0.0.1:8001")
-
 log_level = 'INFO'
 work_dir = '/data/ahkamal/output_data/'
-load_from = '/data/ahkamal/6-DoF_Vehicle_Pose_Estimation_Through_Deep_Learning/configs/htc/htc_hrnetv2p_w48_20e_20190810-f6d2c3fd.pth'
-# load_from = '/home/ahkamal/Desktop/htc_hrnetv2p_w48_28e_20190810-a4274b38.pth'
-# load_from = '/home/ahkamal/Desktop/htc_dconv_c3-c5_mstrain_400_1400_x101_64x4d_fpn_20e_20190408-0e50669c.pth'
-resume_from = '/data/ahkamal/output_data/May12-14-00(lowthresh)/epoch_15.pth'
-# load_from = None # always load from
-# resume_from = None
+load_from = '/data/ahkamal/6-DoF_Vehicle_Pose_Estimation_Through_Deep_Learning/configs/htc/htc_hrnetv2p_w48_28e_20190810-a4274b38.pth'
+resume_from = None
+# resume_from = '/data/ahkamal/output_data/Jun17-22-59(frCentre-5m)/epoch_18.pth'
+
 workflow = [('train', 1)]
 
 # postprocessing flags here

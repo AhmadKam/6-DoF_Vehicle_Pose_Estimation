@@ -55,10 +55,7 @@ class KagglePKUDataset(CustomDataset):
         self.image_shape = (1230, 3384)
         self.bottom_half = 0
         self.unique_car_mode = [79]
-        # self.unique_car_mode = [2, 6, 7, 8, 9, 12, 14, 16, 18,
-        #                         19, 20, 23, 25, 27, 28, 31, 32,
-        #                         35, 37, 40, 43, 46, 47, 48, 50,
-        #                         51, 54, 56, 60, 61, 66, 70, 71, 76, 79]
+
         self.cat2label = {car_model: i for i, car_model in enumerate(self.unique_car_mode)}
 
         

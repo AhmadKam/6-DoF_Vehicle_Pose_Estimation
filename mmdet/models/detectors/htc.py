@@ -500,6 +500,7 @@ class HybridTaskCascade(CascadeRCNN):
                        's1.car_cls_ce_loss', 's1.car_cls_acc', 's1.loss_quaternion', 's1.rotation_distance',
                        's2.car_cls_ce_loss', 's2.car_cls_acc', 's2.loss_quaternion', 's2.rotation_distance',
                        's2.loss_translation', 's2.translation_distance', 's2.translation_distance_relative']
+
         for key in htc_keys:
             new_key = 'htc/' + key
             losses[new_key] = losses[key]

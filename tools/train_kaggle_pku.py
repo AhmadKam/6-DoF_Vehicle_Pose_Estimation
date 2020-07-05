@@ -6,7 +6,7 @@ multiprocessing.set_start_method('spawn', True)
 import argparse
 import subprocess
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '0, 1'
+# os.environ['CUDA_VISIBLE_DEVICES'] = '0, 1'
 import torch
 from datetime import datetime
 
@@ -25,8 +25,11 @@ def get_git_revision_short_hash():
 
 
 def parse_args():
+    repo_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    config_path = os.path.join(repo_path,'configs/htc/')
+
     parser = argparse.ArgumentParser(description='Train a detector')
-    parser.add_argument('--config', default='/data/ahkamal/6-DoF_Vehicle_Pose_Estimation_Through_Deep_Learning/configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py', help='train config file path')
+    parser.add_argument('--config', default=os.path.join(config_path,'htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py'), help='train config file path')
     parser.add_argument('--work_dir', help='the dir to save logs and models')
     parser.add_argument('--resume_from', help='the checkpoint file to resume from')
     parser.add_argument('--validate', default=True, help='whether to evaluate the checkpoint during training')
@@ -42,7 +45,7 @@ def parse_args():
     return args
 
 
-def main():
+def main(): 
     args = parse_args()
 
     cfg = Config.fromfile(args.config)
@@ -55,12 +58,12 @@ def main():
     if args.resume_from is not None:
         cfg.resume_from = args.resume_from
     cfg.gpus = args.gpus
-    # Di WU change the saving directory according to the datetime
+    # Change the saving directory according to the datetime
     cfg.work_dir = cfg.work_dir + datetime.now().strftime("%b%d-%H-%M")
 
     if args.autoscale_lr:
         # apply the linear scaling rule (https://arxiv.org/abs/1706.02677)
-        cfg.optimizer['lr'] = cfg.optimizer['lr'] * cfg.gpus / 8
+        cfg.optimizer['lr'] = cfg.optimizer['lr'] * cfg.gpus / 2
 
     # init distributed env first, since logger depends on the dist info.5
     if args.launcher == 'none':

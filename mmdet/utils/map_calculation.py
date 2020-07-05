@@ -83,16 +83,16 @@ def RotationDistance(p, g):
     return W
 
 
-thres_tr_list = [0.02]
-thres_ro_list = [5]
+thres_tr_list = [0.02] # translation threshold (m)
+thres_ro_list = [5] # rotation threshold (deg)
 
 delta_x = 1692 - 1692.0
 fx = 3701.25
 
 def check_match(idx, train_df, valid_df,flip_mode=False):
     keep_gt = False
-    thre_tr_dist = thres_tr_list[idx] # translation threshold
-    thre_ro_dist = thres_ro_list[idx] # rotation threshold
+    thre_tr_dist = thres_tr_list[idx]
+    thre_ro_dist = thres_ro_list[idx]
     
     train_dict = {imgID: str2coords(s, names=['carid_or_score', 'yaw', 'pitch', 'roll', 'x', 'y', 'z']) for imgID, s in
                   zip(train_df['ImageId'], train_df['PredictionString'])}
