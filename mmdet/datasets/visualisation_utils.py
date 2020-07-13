@@ -599,47 +599,26 @@ def draw_box_mesh_kaggle_pku(name, img_original, bboxes, segms, class_names,
 
         ## time to draw mesh
         vertices = np.array(car_model_dict[class_names[bbox_idx]]['vertices'])
-        # vertices[:, 1] = -vertices[:, 1]
+        vertices[:, 1] = -vertices[:, 1]
         triangles = np.array(car_model_dict[class_names[bbox_idx]]['faces']) - 1
 
         ea = euler_angle[bbox_idx]
         yaw, pitch, roll = ea[0], ea[1], ea[2]
         Rt = np.eye(4)
         Rt[:3, 3] = t
-        # Rt[:3, :3] = euler_to_Rot(yaw, pitch, roll).T
-        Rt[:3, :3] = [[0.1556,0.9878,-0.01],[-0.9857,0.1559,0.0636],[0.0644,0.0001,0.9979]]
-        # Rt[:3, 3] = (-Rt[:3, :3].T) @ t
-        # Rt[:3, :3] = Rt[:3, :3].T
+        Rt[:3, :3] = euler_to_Rot(yaw, pitch, roll).T
 
         P = np.ones((vertices.shape[0], vertices.shape[1] + 1))
         P[:, :-1] = vertices
         P = P.T      
 
-        # img_cor_points = np.dot(camera_matrix, np.dot(Rt, P))
-        # img_cor_points = img_cor_points.T
-        # print(img_cor_points[0])
-        # img_cor_points = np.matmul(camera_matrix,np.matmul(Rt,P))
-        # img_cor_points = camera_matrix @ Rt[:3,:] @ P
-        cam_cor_points = Rt @ P
-        cam_cor_points = cam_cor_points.T
-        print(cam_cor_points.shape)
+        img_cor_points = camera_matrix @ Rt[:3,:] @ P     
+        img_cor_points = img_cor_points.T
 
-        cam_cor_points[:, 0] /= cam_cor_points[:, 2]
-        cam_cor_points[:, 1] /= cam_cor_points[:, 2]
-        # img_cor_points = img_cor_points.T
+        img_cor_points[:, 0] /= img_cor_points[:, 2]
+        img_cor_points[:, 1] /= img_cor_points[:, 2]
 
-        img_cor_points = np.zeros((cam_cor_points.shape[0],2))
-        # print(img_cor_points.shape)
-        img_cor_points[:,0] = 3701.25*cam_cor_points[:, 0]+1692.0
-        img_cor_points[:,1] = 2391.6667*cam_cor_points[:, 1]+615.0
-
-        # img_cor_points[:, 0] /= img_cor_points[:, 2]
-        # img_cor_points[:, 1] /= img_cor_points[:, 2]
-
-        # print(img_cor_points[77])
-        # print(img_cor_points[0])
         img_cor_points = all_imgs_coords_points[name]
-        # print(img_cor_points[0])
 
         for tri in triangles:
             coord = np.array([img_cor_points[tri[0]][:2], img_cor_points[tri[1]][:2], img_cor_points[tri[2]][:2]],
