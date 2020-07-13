@@ -85,13 +85,24 @@ rendered_image
     1. Set `currentCameraObj` variable to the camera for which the calibration parameters are needed.
     2. Click on the "Run Script" button. The camera parameters will be generated in the terminal.
 
+### Image Naming Convention
+1. Multi-Scale Dataset - For image `van_Zx_sy_fz.png`:
+    * *x* is the circle height.
+    * *y* is the circle scale.
+    * *z* is the frame in which the image is rendered.
+    
+2. Single-Scale Dataset - For image `van_Xx_Yy_Rz.png`:
+    * *x* is the translation along the X-axis.
+    * *y* is the translation along the Y-axis.
+    * *z* is the translation about the Z-axis.
+
 ## Directories
 The directories in the files below need to be set:
 
 1. In the configuration file in [../configs/htc/](../configs/htc/)
 * Set the path to the dataset directory `ds_dir`.
 * Set the path to load the HRNetV2p model in `load_from`. The model can be found [here](https://drive.google.com/file/d/17qN0pB9Tp0DFBonEgDWx_JRFEfP8wT_E/view?usp=sharing) and needs to be added to [../configs/htc/](../configs/htc/)
-* IF NEETED: Set the path to resume the epoch in `resume_from`.
+* IF NEEDED: Set the path to resume the epoch in `resume_from`.
 
 **NOTE**: 
 - `resume_from` loads both the model weights and optimizer status at the epoch of the respective checkpoint. It is useful for resuming the training process if it is accidentally interrupted.
